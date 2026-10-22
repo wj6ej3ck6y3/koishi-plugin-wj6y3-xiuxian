@@ -1,0 +1,22 @@
+{
+  "name": "koishi-plugin-wj6y3-xiuxian",
+  "description": "桐子的修仙遊戲插件",
+  "version": "0.0.1",
+  "main": "lib/index.js",
+  "typings": "lib/index.d.ts",
+  "files": [
+    "lib",
+    "dist"
+  ],
+  "license": "MIT",
+  "scripts": {},
+  "keywords": [
+    "chatbot",
+    "koishi",
+    "plugin"
+  ],
+  "devDependencies": {},
+  "peerDependencies": {
+    "koishi": "4.18.11"
+  }
+}
