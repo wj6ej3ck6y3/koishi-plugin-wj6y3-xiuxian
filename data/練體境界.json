@@ -1,0 +1,1271 @@
+{
+  "20001": {
+    "name": "筋骨境一层",
+    "costStone": 100000,
+    "probability": 100,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.005
+      },
+      {
+        "stat": "atk",
+        "value": 0.005
+      },
+      {
+        "stat": "def",
+        "value": 0.01
+      },
+      {
+        "stat": "crit",
+        "value": 0.0005
+      },
+      {
+        "stat": "critDmg",
+        "value": 0.005
+      }
+    ]
+  },
+  "20002": {
+    "name": "筋骨境二层",
+    "costStone": 100000,
+    "probability": 100,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.01
+      },
+      {
+        "stat": "atk",
+        "value": 0.01
+      },
+      {
+        "stat": "def",
+        "value": 0.02
+      },
+      {
+        "stat": "crit",
+        "value": 0.001
+      },
+      {
+        "stat": "critDmg",
+        "value": 0.01
+      }
+    ]
+  },
+  "20003": {
+    "name": "筋骨境三层",
+    "costStone": 150000,
+    "probability": 95,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.015
+      },
+      {
+        "stat": "atk",
+        "value": 0.015
+      },
+      {
+        "stat": "def",
+        "value": 0.03
+      },
+      {
+        "stat": "crit",
+        "value": 0.0015
+      },
+      {
+        "stat": "critDmg",
+        "value": 0.015
+      }
+    ]
+  },
+  "20004": {
+    "name": "筋骨境四层",
+    "costStone": 200000,
+    "probability": 95,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.02
+      },
+      {
+        "stat": "atk",
+        "value": 0.02
+      },
+      {
+        "stat": "def",
+        "value": 0.04
+      },
+      {
+        "stat": "crit",
+        "value": 0.002
+      },
+      {
+        "stat": "critDmg",
+        "value": 0.02
+      }
+    ]
+  },
+  "20005": {
+    "name": "筑基境初期",
+    "costStone": 300000,
+    "probability": 90,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.03
+      },
+      {
+        "stat": "atk",
+        "value": 0.028
+      },
+      {
+        "stat": "def",
+        "value": 0.055
+      },
+      {
+        "stat": "crit",
+        "value": 0.0028
+      },
+      {
+        "stat": "critDmg",
+        "value": 0.03
+      }
+    ]
+  },
+  "20006": {
+    "name": "筑基境中期",
+    "costStone": 400000,
+    "probability": 90,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.04
+      },
+      {
+        "stat": "atk",
+        "value": 0.036
+      },
+      {
+        "stat": "def",
+        "value": 0.07
+      },
+      {
+        "stat": "crit",
+        "value": 0.0036
+      },
+      {
+        "stat": "critDmg",
+        "value": 0.04
+      }
+    ]
+  },
+  "20007": {
+    "name": "筑基境圆满",
+    "costStone": 500000,
+    "probability": 85,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.05
+      },
+      {
+        "stat": "atk",
+        "value": 0.044
+      },
+      {
+        "stat": "def",
+        "value": 0.085
+      },
+      {
+        "stat": "crit",
+        "value": 0.0044
+      },
+      {
+        "stat": "critDmg",
+        "value": 0.05
+      }
+    ]
+  },
+  "20008": {
+    "name": "结丹境初期",
+    "costStone": 800000,
+    "probability": 85,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.062
+      },
+      {
+        "stat": "atk",
+        "value": 0.054
+      },
+      {
+        "stat": "def",
+        "value": 0.103
+      },
+      {
+        "stat": "crit",
+        "value": 0.0054
+      },
+      {
+        "stat": "critDmg",
+        "value": 0.062
+      }
+    ]
+  },
+  "20009": {
+    "name": "结丹境中期",
+    "costStone": 1000000,
+    "probability": 80,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.074
+      },
+      {
+        "stat": "atk",
+        "value": 0.064
+      },
+      {
+        "stat": "def",
+        "value": 0.121
+      },
+      {
+        "stat": "crit",
+        "value": 0.0064
+      },
+      {
+        "stat": "critDmg",
+        "value": 0.074
+      }
+    ]
+  },
+  "20010": {
+    "name": "结丹境圆满",
+    "costStone": 1200000,
+    "probability": 75,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.086
+      },
+      {
+        "stat": "atk",
+        "value": 0.074
+      },
+      {
+        "stat": "def",
+        "value": 0.139
+      },
+      {
+        "stat": "crit",
+        "value": 0.0074
+      },
+      {
+        "stat": "critDmg",
+        "value": 0.086
+      }
+    ]
+  },
+  "20011": {
+    "name": "元婴境初期",
+    "costStone": 2000000,
+    "probability": 75,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.101
+      },
+      {
+        "stat": "atk",
+        "value": 0.086
+      },
+      {
+        "stat": "def",
+        "value": 0.159
+      },
+      {
+        "stat": "crit",
+        "value": 0.0086
+      },
+      {
+        "stat": "critDmg",
+        "value": 0.101
+      }
+    ]
+  },
+  "20012": {
+    "name": "元婴境中期",
+    "costStone": 2500000,
+    "probability": 70,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.116
+      },
+      {
+        "stat": "atk",
+        "value": 0.098
+      },
+      {
+        "stat": "def",
+        "value": 0.179
+      },
+      {
+        "stat": "crit",
+        "value": 0.0098
+      },
+      {
+        "stat": "critDmg",
+        "value": 0.116
+      }
+    ]
+  },
+  "20013": {
+    "name": "元婴境圆满",
+    "costStone": 3000000,
+    "probability": 65,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.131
+      },
+      {
+        "stat": "atk",
+        "value": 0.11
+      },
+      {
+        "stat": "def",
+        "value": 0.199
+      },
+      {
+        "stat": "crit",
+        "value": 0.011
+      },
+      {
+        "stat": "critDmg",
+        "value": 0.131
+      }
+    ]
+  },
+  "20014": {
+    "name": "化神境初期",
+    "costStone": 5000000,
+    "probability": 65,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.149
+      },
+      {
+        "stat": "atk",
+        "value": 0.124
+      },
+      {
+        "stat": "def",
+        "value": 0.224
+      },
+      {
+        "stat": "crit",
+        "value": 0.0124
+      },
+      {
+        "stat": "critDmg",
+        "value": 0.149
+      }
+    ]
+  },
+  "20015": {
+    "name": "化神境中期",
+    "costStone": 6000000,
+    "probability": 60,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.167
+      },
+      {
+        "stat": "atk",
+        "value": 0.138
+      },
+      {
+        "stat": "def",
+        "value": 0.249
+      },
+      {
+        "stat": "crit",
+        "value": 0.0138
+      },
+      {
+        "stat": "critDmg",
+        "value": 0.167
+      }
+    ]
+  },
+  "20016": {
+    "name": "化神境圆满",
+    "costStone": 7000000,
+    "probability": 55,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.185
+      },
+      {
+        "stat": "atk",
+        "value": 0.152
+      },
+      {
+        "stat": "def",
+        "value": 0.274
+      },
+      {
+        "stat": "crit",
+        "value": 0.0152
+      },
+      {
+        "stat": "critDmg",
+        "value": 0.185
+      }
+    ]
+  },
+  "20017": {
+    "name": "炼虚境初期",
+    "costStone": 10000000,
+    "probability": 55,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.205
+      },
+      {
+        "stat": "atk",
+        "value": 0.168
+      },
+      {
+        "stat": "def",
+        "value": 0.304
+      },
+      {
+        "stat": "crit",
+        "value": 0.0168
+      },
+      {
+        "stat": "critDmg",
+        "value": 0.205
+      }
+    ]
+  },
+  "20018": {
+    "name": "炼虚境中期",
+    "costStone": 12000000,
+    "probability": 50,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.225
+      },
+      {
+        "stat": "atk",
+        "value": 0.184
+      },
+      {
+        "stat": "def",
+        "value": 0.334
+      },
+      {
+        "stat": "crit",
+        "value": 0.0184
+      },
+      {
+        "stat": "critDmg",
+        "value": 0.225
+      }
+    ]
+  },
+  "20019": {
+    "name": "炼虚境圆满",
+    "costStone": 15000000,
+    "probability": 45,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.245
+      },
+      {
+        "stat": "atk",
+        "value": 0.2
+      },
+      {
+        "stat": "def",
+        "value": 0.364
+      },
+      {
+        "stat": "crit",
+        "value": 0.02
+      },
+      {
+        "stat": "critDmg",
+        "value": 0.245
+      }
+    ]
+  },
+  "20020": {
+    "name": "合体境初期",
+    "costStone": 20000000,
+    "probability": 45,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.27
+      },
+      {
+        "stat": "atk",
+        "value": 0.22
+      },
+      {
+        "stat": "def",
+        "value": 0.399
+      },
+      {
+        "stat": "crit",
+        "value": 0.022
+      },
+      {
+        "stat": "critDmg",
+        "value": 0.27
+      }
+    ]
+  },
+  "20021": {
+    "name": "合体境中期",
+    "costStone": 25000000,
+    "probability": 40,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.295
+      },
+      {
+        "stat": "atk",
+        "value": 0.24
+      },
+      {
+        "stat": "def",
+        "value": 0.434
+      },
+      {
+        "stat": "crit",
+        "value": 0.024
+      },
+      {
+        "stat": "critDmg",
+        "value": 0.295
+      }
+    ]
+  },
+  "20022": {
+    "name": "合体境圆满",
+    "costStone": 30000000,
+    "probability": 35,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.32
+      },
+      {
+        "stat": "atk",
+        "value": 0.26
+      },
+      {
+        "stat": "def",
+        "value": 0.469
+      },
+      {
+        "stat": "crit",
+        "value": 0.026
+      },
+      {
+        "stat": "critDmg",
+        "value": 0.32
+      }
+    ]
+  },
+  "20023": {
+    "name": "大乘境初期",
+    "costStone": 50000000,
+    "probability": 35,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.35
+      },
+      {
+        "stat": "atk",
+        "value": 0.285
+      },
+      {
+        "stat": "def",
+        "value": 0.509
+      },
+      {
+        "stat": "crit",
+        "value": 0.0285
+      },
+      {
+        "stat": "critDmg",
+        "value": 0.35
+      }
+    ]
+  },
+  "20024": {
+    "name": "大乘境中期",
+    "costStone": 60000000,
+    "probability": 30,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.38
+      },
+      {
+        "stat": "atk",
+        "value": 0.31
+      },
+      {
+        "stat": "def",
+        "value": 0.549
+      },
+      {
+        "stat": "crit",
+        "value": 0.031
+      },
+      {
+        "stat": "critDmg",
+        "value": 0.38
+      }
+    ]
+  },
+  "20025": {
+    "name": "大乘境圆满",
+    "costStone": 80000000,
+    "probability": 25,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.41
+      },
+      {
+        "stat": "atk",
+        "value": 0.335
+      },
+      {
+        "stat": "def",
+        "value": 0.589
+      },
+      {
+        "stat": "crit",
+        "value": 0.0335
+      },
+      {
+        "stat": "critDmg",
+        "value": 0.41
+      }
+    ]
+  },
+  "20026": {
+    "name": "渡劫境初期",
+    "costStone": 120000000,
+    "probability": 25,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.445
+      },
+      {
+        "stat": "atk",
+        "value": 0.365
+      },
+      {
+        "stat": "def",
+        "value": 0.639
+      },
+      {
+        "stat": "crit",
+        "value": 0.0365
+      },
+      {
+        "stat": "critDmg",
+        "value": 0.445
+      }
+    ]
+  },
+  "20027": {
+    "name": "渡劫境中期",
+    "costStone": 150000000,
+    "probability": 20,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.48
+      },
+      {
+        "stat": "atk",
+        "value": 0.395
+      },
+      {
+        "stat": "def",
+        "value": 0.689
+      },
+      {
+        "stat": "crit",
+        "value": 0.0395
+      },
+      {
+        "stat": "critDmg",
+        "value": 0.48
+      }
+    ]
+  },
+  "20028": {
+    "name": "渡劫境圆满",
+    "costStone": 200000000,
+    "probability": 15,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.515
+      },
+      {
+        "stat": "atk",
+        "value": 0.425
+      },
+      {
+        "stat": "def",
+        "value": 0.739
+      },
+      {
+        "stat": "crit",
+        "value": 0.0425
+      },
+      {
+        "stat": "critDmg",
+        "value": 0.515
+      }
+    ]
+  },
+  "20029": {
+    "name": "半步真仙",
+    "costStone": 300000000,
+    "probability": 15,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.555
+      },
+      {
+        "stat": "atk",
+        "value": 0.46
+      },
+      {
+        "stat": "def",
+        "value": 0.799
+      },
+      {
+        "stat": "crit",
+        "value": 0.046
+      },
+      {
+        "stat": "critDmg",
+        "value": 0.555
+      }
+    ]
+  },
+  "20030": {
+    "name": "真仙境初期",
+    "costStone": 400000000,
+    "probability": 12,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.6
+      },
+      {
+        "stat": "atk",
+        "value": 0.5
+      },
+      {
+        "stat": "def",
+        "value": 0.869
+      },
+      {
+        "stat": "crit",
+        "value": 0.05
+      },
+      {
+        "stat": "critDmg",
+        "value": 0.6
+      }
+    ]
+  },
+  "20031": {
+    "name": "真仙境中期",
+    "costStone": 500000000,
+    "probability": 10,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.645
+      },
+      {
+        "stat": "atk",
+        "value": 0.54
+      },
+      {
+        "stat": "def",
+        "value": 0.939
+      },
+      {
+        "stat": "crit",
+        "value": 0.054
+      },
+      {
+        "stat": "critDmg",
+        "value": 0.645
+      }
+    ]
+  },
+  "20032": {
+    "name": "真仙境圆满",
+    "costStone": 600000000,
+    "probability": 8,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.69
+      },
+      {
+        "stat": "atk",
+        "value": 0.58
+      },
+      {
+        "stat": "def",
+        "value": 1.009
+      },
+      {
+        "stat": "crit",
+        "value": 0.058
+      },
+      {
+        "stat": "critDmg",
+        "value": 0.69
+      }
+    ]
+  },
+  "20033": {
+    "name": "金仙境初期",
+    "costStone": 800000000,
+    "probability": 8,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.74
+      },
+      {
+        "stat": "atk",
+        "value": 0.625
+      },
+      {
+        "stat": "def",
+        "value": 1.089
+      },
+      {
+        "stat": "crit",
+        "value": 0.0625
+      },
+      {
+        "stat": "critDmg",
+        "value": 0.74
+      }
+    ]
+  },
+  "20034": {
+    "name": "金仙境中期",
+    "costStone": 1000000000,
+    "probability": 6,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.79
+      },
+      {
+        "stat": "atk",
+        "value": 0.67
+      },
+      {
+        "stat": "def",
+        "value": 1.169
+      },
+      {
+        "stat": "crit",
+        "value": 0.067
+      },
+      {
+        "stat": "critDmg",
+        "value": 0.79
+      }
+    ]
+  },
+  "20035": {
+    "name": "金仙境圆满",
+    "costStone": 1200000000,
+    "probability": 5,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.84
+      },
+      {
+        "stat": "atk",
+        "value": 0.715
+      },
+      {
+        "stat": "def",
+        "value": 1.249
+      },
+      {
+        "stat": "crit",
+        "value": 0.0715
+      },
+      {
+        "stat": "critDmg",
+        "value": 0.84
+      }
+    ]
+  },
+  "20036": {
+    "name": "太乙境初期",
+    "costStone": 1500000000,
+    "probability": 5,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.9
+      },
+      {
+        "stat": "atk",
+        "value": 0.765
+      },
+      {
+        "stat": "def",
+        "value": 1.349
+      },
+      {
+        "stat": "crit",
+        "value": 0.0765
+      },
+      {
+        "stat": "critDmg",
+        "value": 0.9
+      }
+    ]
+  },
+  "20037": {
+    "name": "太乙境中期",
+    "costStone": 1800000000,
+    "probability": 4,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.96
+      },
+      {
+        "stat": "atk",
+        "value": 0.815
+      },
+      {
+        "stat": "def",
+        "value": 1.449
+      },
+      {
+        "stat": "crit",
+        "value": 0.0815
+      },
+      {
+        "stat": "critDmg",
+        "value": 0.96
+      }
+    ]
+  },
+  "20038": {
+    "name": "太乙境圆满",
+    "costStone": 2000000000,
+    "probability": 3,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 1.02
+      },
+      {
+        "stat": "atk",
+        "value": 0.865
+      },
+      {
+        "stat": "def",
+        "value": 1.549
+      },
+      {
+        "stat": "crit",
+        "value": 0.0865
+      },
+      {
+        "stat": "critDmg",
+        "value": 1.02
+      }
+    ]
+  },
+  "20039": {
+    "name": "化圣境一层",
+    "costStone": 3000000000,
+    "probability": 3,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 1.045
+      },
+      {
+        "stat": "atk",
+        "value": 0.885
+      },
+      {
+        "stat": "def",
+        "value": 1.589
+      },
+      {
+        "stat": "crit",
+        "value": 0.089
+      },
+      {
+        "stat": "critDmg",
+        "value": 1.045
+      }
+    ]
+  },
+  "20040": {
+    "name": "化圣境二层",
+    "costStone": 3500000000,
+    "probability": 3,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 1.07
+      },
+      {
+        "stat": "atk",
+        "value": 0.905
+      },
+      {
+        "stat": "def",
+        "value": 1.629
+      },
+      {
+        "stat": "crit",
+        "value": 0.0915
+      },
+      {
+        "stat": "critDmg",
+        "value": 1.07
+      }
+    ]
+  },
+  "20041": {
+    "name": "化圣境三层",
+    "costStone": 4000000000,
+    "probability": 3,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 1.095
+      },
+      {
+        "stat": "atk",
+        "value": 0.925
+      },
+      {
+        "stat": "def",
+        "value": 1.669
+      },
+      {
+        "stat": "crit",
+        "value": 0.094
+      },
+      {
+        "stat": "critDmg",
+        "value": 1.095
+      }
+    ]
+  },
+  "20042": {
+    "name": "化圣境四层",
+    "costStone": 4500000000,
+    "probability": 3,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 1.12
+      },
+      {
+        "stat": "atk",
+        "value": 0.945
+      },
+      {
+        "stat": "def",
+        "value": 1.709
+      },
+      {
+        "stat": "crit",
+        "value": 0.0965
+      },
+      {
+        "stat": "critDmg",
+        "value": 1.12
+      }
+    ]
+  },
+  "20043": {
+    "name": "化圣境五层",
+    "costStone": 5000000000,
+    "probability": 2,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 1.145
+      },
+      {
+        "stat": "atk",
+        "value": 0.965
+      },
+      {
+        "stat": "def",
+        "value": 1.749
+      },
+      {
+        "stat": "crit",
+        "value": 0.099
+      },
+      {
+        "stat": "critDmg",
+        "value": 1.145
+      }
+    ]
+  },
+  "20044": {
+    "name": "化圣境六层",
+    "costStone": 6000000000,
+    "probability": 2,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 1.17
+      },
+      {
+        "stat": "atk",
+        "value": 0.985
+      },
+      {
+        "stat": "def",
+        "value": 1.789
+      },
+      {
+        "stat": "crit",
+        "value": 0.1015
+      },
+      {
+        "stat": "critDmg",
+        "value": 1.17
+      }
+    ]
+  },
+  "20045": {
+    "name": "化圣境七层",
+    "costStone": 7000000000,
+    "probability": 2,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 1.195
+      },
+      {
+        "stat": "atk",
+        "value": 1.005
+      },
+      {
+        "stat": "def",
+        "value": 1.829
+      },
+      {
+        "stat": "crit",
+        "value": 0.104
+      },
+      {
+        "stat": "critDmg",
+        "value": 1.195
+      }
+    ]
+  },
+  "20046": {
+    "name": "化圣境八层",
+    "costStone": 8000000000,
+    "probability": 2,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 1.22
+      },
+      {
+        "stat": "atk",
+        "value": 1.025
+      },
+      {
+        "stat": "def",
+        "value": 1.869
+      },
+      {
+        "stat": "crit",
+        "value": 0.1065
+      },
+      {
+        "stat": "critDmg",
+        "value": 1.22
+      }
+    ]
+  },
+  "20047": {
+    "name": "化圣境九层",
+    "costStone": null,
+    "probability": null,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 1.245
+      },
+      {
+        "stat": "atk",
+        "value": 1.045
+      },
+      {
+        "stat": "def",
+        "value": 1.909
+      },
+      {
+        "stat": "crit",
+        "value": 0.109
+      },
+      {
+        "stat": "critDmg",
+        "value": 1.245
+      }
+    ]
+  }
+}

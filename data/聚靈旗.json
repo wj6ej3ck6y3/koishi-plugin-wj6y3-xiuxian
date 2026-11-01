@@ -1,0 +1,37 @@
+{
+  "5000": {
+    "name": "一级聚灵旗",
+    "weight": 40,
+    "cultivateSpeed": 1,
+    "herbSpeed": 1,
+    "desc": "微聚灵气，初具其效。"
+  },
+  "5001": {
+    "name": "二级聚灵旗",
+    "weight": 35,
+    "cultivateSpeed": 2,
+    "herbSpeed": 2,
+    "desc": "灵气渐聚，修炼稍速。"
+  },
+  "5002": {
+    "name": "三级聚灵旗",
+    "weight": 30,
+    "cultivateSpeed": 3,
+    "herbSpeed": 3,
+    "desc": "灵气汇聚，修炼更速。"
+  },
+  "5003": {
+    "name": "四级聚灵旗",
+    "weight": 25,
+    "cultivateSpeed": 4,
+    "herbSpeed": 4,
+    "desc": "灵气翻涌，修炼大速。"
+  },
+  "5004": {
+    "name": "仙级聚灵旗",
+    "weight": 20,
+    "cultivateSpeed": 5,
+    "herbSpeed": 5,
+    "desc": "仙灵汇聚，修炼神速。"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "4001": {
+    "name": "寒铁铸心炉",
+    "weight": 20,
+    "bonusQuantity": 2,
+    "bonusSuccess": 0.05,
+    "desc": "万年寒铁铸就，丹成可多两枚。"
+  },
+  "4002": {
+    "name": "雕花紫铜炉",
+    "weight": 30,
+    "bonusQuantity": 1,
+    "bonusSuccess": 0.02,
+    "desc": "紫铜雕花，出自大师之手，丹成可多一枚。"
+  },
+  "4003": {
+    "name": "陨铁炉",
+    "weight": 40,
+    "bonusQuantity": 0,
+    "bonusSuccess": 0,
+    "desc": "陨铁所炼，耐得高温，可为炼丹之基。"
+  }
+}

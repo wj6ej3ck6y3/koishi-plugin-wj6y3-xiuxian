@@ -1,0 +1,128 @@
+{
+  "10001": {
+    "name": "饮血术-辅",
+    "weight": 100,
+    "effect": "lifesteal",
+    "value": 5,
+    "desc": "饮血而炼，损人利己。"
+  },
+  "10002": {
+    "name": "夺灵诀-辅",
+    "weight": 100,
+    "effect": "stealQi",
+    "value": 5,
+    "desc": "夺灵为辅，增势倍之。"
+  },
+  "10003": {
+    "name": "五府锻元诀-辅",
+    "weight": 100,
+    "effect": "hpPct",
+    "value": 15,
+    "desc": "锻元为辅，固本培元。"
+  },
+  "10101": {
+    "name": "长生诀-辅",
+    "weight": 80,
+    "effect": "longLife",
+    "value": 3,
+    "desc": "辅修长生，补主功之缺。"
+  },
+  "10102": {
+    "name": "养刀术-辅",
+    "weight": 80,
+    "effect": "damageBoost",
+    "value": 15,
+    "desc": "养刀千日，用在一时。"
+  },
+  "10201": {
+    "name": "方圆-辅",
+    "weight": 60,
+    "effect": "longLife",
+    "value": 4,
+    "desc": "方圆有度，刚柔并济。"
+  },
+  "10202": {
+    "name": "敛息术-辅",
+    "weight": 60,
+    "effect": "stealth",
+    "value": 4,
+    "desc": "敛息藏锋，不动声色。"
+  },
+  "10203": {
+    "name": "飞星剑诀-辅",
+    "weight": 60,
+    "effect": "damageBoost",
+    "value": 30,
+    "desc": "飞星剑意，辅修增威。"
+  },
+  "10311": {
+    "name": "静气诀-辅",
+    "weight": 30,
+    "effect": "stealth",
+    "value": 5,
+    "desc": "静气凝神，辅修之基。"
+  },
+  "10312": {
+    "name": "生生造化诀-辅",
+    "weight": 30,
+    "effect": "gainBoost",
+    "value": 8,
+    "desc": "生生造化，增益无穷。"
+  },
+  "10313": {
+    "name": "长春通玄录-辅",
+    "weight": 30,
+    "effect": "longLife",
+    "value": 5,
+    "desc": "长春通玄，辅修良策。"
+  },
+  "10314": {
+    "name": "少阳诀-辅",
+    "weight": 30,
+    "effect": "lifesteal",
+    "value": 9,
+    "desc": "少阳初升，生机勃发。"
+  },
+  "10315": {
+    "name": "紫霄功-辅",
+    "weight": 30,
+    "effect": "gainBoost",
+    "value": 10,
+    "desc": "紫霄之气，辅修增势。"
+  },
+  "10401": {
+    "name": "玄门引气真诀-辅",
+    "weight": 25,
+    "effect": "longLife",
+    "value": 6,
+    "desc": "玄门引气，辅修真法。"
+  },
+  "10402": {
+    "name": "金刚移山诀-辅",
+    "weight": 25,
+    "effect": "hpPct",
+    "value": 100,
+    "desc": "金刚移山，力补主功。"
+  },
+  "10403": {
+    "name": "玄清天衍录-辅",
+    "weight": 25,
+    "effect": "stealth",
+    "value": 7,
+    "desc": "玄清天衍，辅修秘典。"
+  },
+  "10408": {
+    "name": "血毒经-辅",
+    "weight": 25,
+    "effect": "poison",
+    "value": 5,
+    "desc": "血毒为经，辅修险途。"
+  },
+  "10411": {
+    "name": "真龙九变-辅",
+    "weight": 20,
+    "effect": "damageBoost",
+    "value": 60,
+    "desc": "真龙九变，辅修通神。"
+  }
+}

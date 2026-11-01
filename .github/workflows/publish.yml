@@ -1,0 +1,37 @@
+name: Publish
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  publish_npm:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # 必需：允许获取 OIDC 令牌
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # 获取完整历史，有利于 provenance 生成
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Update npm
+        run: npm install -g npm@latest
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Build
+        run: yarn build
+
+      - name: Publish to npm
+        run: npm publish --provenance --access public --loglevel verbose
+        # 不要设置 NODE_AUTH_TOKEN，OIDC 会自动认证

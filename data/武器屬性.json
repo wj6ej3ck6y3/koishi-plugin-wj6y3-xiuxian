@@ -1,0 +1,444 @@
+{
+  "7001": {
+    "name": "精铁符剑",
+    "weight": 100,
+    "modifiers": [
+      {
+        "stat": "atk",
+        "value": 0.04
+      },
+      {
+        "stat": "pen",
+        "value": 0.08
+      }
+    ],
+    "desc": "精铁铸就，锋锐无匹。"
+  },
+  "7002": {
+    "name": "桃木符剑",
+    "weight": 90,
+    "modifiers": [
+      {
+        "stat": "crit",
+        "value": 0.08
+      },
+      {
+        "stat": "pen",
+        "value": 0.08
+      }
+    ],
+    "desc": "桃木所炼，隐含正阳之气。"
+  },
+  "7003": {
+    "name": "精元符剑",
+    "weight": 90,
+    "modifiers": [
+      {
+        "stat": "atk",
+        "value": 0.02
+      },
+      {
+        "stat": "crit",
+        "value": 0.04
+      },
+      {
+        "stat": "pen",
+        "value": 0.08
+      }
+    ],
+    "desc": "取精元淬炼，剑光内敛。"
+  },
+  "7011": {
+    "name": "火铜符剑",
+    "weight": 80,
+    "modifiers": [
+      {
+        "stat": "atk",
+        "value": 0.06
+      },
+      {
+        "stat": "pen",
+        "value": 0.08
+      }
+    ],
+    "desc": "火铜淬锋，剑身炽热逼人。"
+  },
+  "7012": {
+    "name": "青玉符剑",
+    "weight": 80,
+    "modifiers": [
+      {
+        "stat": "crit",
+        "value": 0.12
+      },
+      {
+        "stat": "pen",
+        "value": 0.08
+      }
+    ],
+    "desc": "青玉温润，剑气清冽。"
+  },
+  "7013": {
+    "name": "灵气剑",
+    "weight": 80,
+    "modifiers": [
+      {
+        "stat": "atk",
+        "value": 0.03
+      },
+      {
+        "stat": "crit",
+        "value": 0.06
+      },
+      {
+        "stat": "pen",
+        "value": 0.08
+      }
+    ],
+    "desc": "引灵气淬炼，剑光流转。"
+  },
+  "7021": {
+    "name": "辟邪惊雷尺",
+    "weight": 80,
+    "modifiers": [
+      {
+        "stat": "atk",
+        "value": 0.08
+      },
+      {
+        "stat": "pen",
+        "value": 0.07
+      }
+    ],
+    "desc": "辟邪镇煞，惊雷随心。"
+  },
+  "7022": {
+    "name": "七星剑",
+    "weight": 80,
+    "modifiers": [
+      {
+        "stat": "crit",
+        "value": 0.16
+      },
+      {
+        "stat": "pen",
+        "value": 0.08
+      }
+    ],
+    "desc": "剑分七星，锋含杀机。"
+  },
+  "7023": {
+    "name": "流光剑",
+    "weight": 80,
+    "modifiers": [
+      {
+        "stat": "atk",
+        "value": 0.04
+      },
+      {
+        "stat": "crit",
+        "value": 0.08
+      },
+      {
+        "stat": "pen",
+        "value": 0.08
+      }
+    ],
+    "desc": "剑如流光，转瞬即至。"
+  },
+  "7031": {
+    "name": "金光镜",
+    "weight": 70,
+    "modifiers": [
+      {
+        "stat": "atk",
+        "value": 0.1
+      }
+    ],
+    "desc": "金光乍现，破邪驱暗。"
+  },
+  "7032": {
+    "name": "阴阳夺魂针",
+    "weight": 70,
+    "modifiers": [
+      {
+        "stat": "crit",
+        "value": 0.2
+      },
+      {
+        "stat": "pen",
+        "value": 0.1
+      }
+    ],
+    "desc": "细针藏阴，夺魂于无形。"
+  },
+  "7033": {
+    "name": "山河鼎",
+    "weight": 70,
+    "modifiers": [
+      {
+        "stat": "atk",
+        "value": 0.05
+      },
+      {
+        "stat": "crit",
+        "value": 0.1
+      }
+    ],
+    "desc": "鼎镇山河，稳如磐石。"
+  },
+  "7041": {
+    "name": "离地焰光旗",
+    "weight": 60,
+    "modifiers": [
+      {
+        "stat": "atk",
+        "value": 0.12
+      },
+      {
+        "stat": "crit",
+        "value": 0.1
+      }
+    ],
+    "desc": "焰旗一展，离火燎原。"
+  },
+  "7042": {
+    "name": "青萍剑",
+    "weight": 60,
+    "modifiers": [
+      {
+        "stat": "crit",
+        "value": 0.24
+      },
+      {
+        "stat": "pen",
+        "value": 0.08
+      }
+    ],
+    "desc": "青萍浮水，剑意逍遥。"
+  },
+  "7043": {
+    "name": "千重峰",
+    "weight": 60,
+    "modifiers": [
+      {
+        "stat": "atk",
+        "value": 0.06
+      },
+      {
+        "stat": "crit",
+        "value": 0.12
+      }
+    ],
+    "desc": "千峰叠嶂，重若山岳。"
+  },
+  "7051": {
+    "name": "五火七禽扇",
+    "weight": 50,
+    "modifiers": [
+      {
+        "stat": "atk",
+        "value": 0.14
+      }
+    ],
+    "desc": "五火齐出，七禽惊飞。"
+  },
+  "7052": {
+    "name": "青莲宝色旗",
+    "weight": 50,
+    "modifiers": [
+      {
+        "stat": "crit",
+        "value": 0.28
+      }
+    ],
+    "desc": "青莲摇曳，宝光护体。"
+  },
+  "7053": {
+    "name": "嗜魂幡",
+    "weight": 50,
+    "modifiers": [
+      {
+        "stat": "atk",
+        "value": 0.07
+      },
+      {
+        "stat": "crit",
+        "value": 0.14
+      }
+    ],
+    "desc": "幡动魂惊，魔音摄心。"
+  },
+  "7061": {
+    "name": "绝仙剑",
+    "weight": 40,
+    "modifiers": [
+      {
+        "stat": "atk",
+        "value": 0.16
+      },
+      {
+        "stat": "pen",
+        "value": 0.08
+      }
+    ],
+    "desc": "剑出绝仙，锋芒盖世。"
+  },
+  "7062": {
+    "name": "落魂钟",
+    "weight": 40,
+    "modifiers": [
+      {
+        "stat": "crit",
+        "value": 0.32
+      }
+    ],
+    "desc": "钟声一响，魂飞魄散。"
+  },
+  "7063": {
+    "name": "乾天剑",
+    "weight": 40,
+    "modifiers": [
+      {
+        "stat": "atk",
+        "value": 0.08
+      },
+      {
+        "stat": "crit",
+        "value": 0.16
+      },
+      {
+        "stat": "pen",
+        "value": 0.08
+      }
+    ],
+    "desc": "乾天一气，剑贯长空。"
+  },
+  "7071": {
+    "name": "乾坤尺",
+    "weight": 30,
+    "modifiers": [
+      {
+        "stat": "atk",
+        "value": 0.18
+      },
+      {
+        "stat": "pen",
+        "value": 0.07
+      }
+    ],
+    "desc": "尺量乾坤，丈断阴阳。"
+  },
+  "7072": {
+    "name": "天地五方旗",
+    "weight": 30,
+    "modifiers": [
+      {
+        "stat": "crit",
+        "value": 0.36
+      }
+    ],
+    "desc": "五方齐聚，天地色变。"
+  },
+  "7073": {
+    "name": "红线遁光针",
+    "weight": 30,
+    "modifiers": [
+      {
+        "stat": "atk",
+        "value": 0.09
+      },
+      {
+        "stat": "crit",
+        "value": 0.18
+      },
+      {
+        "stat": "pen",
+        "value": 0.1
+      }
+    ],
+    "desc": "红线一线，遁光无踪。"
+  },
+  "7081": {
+    "name": "陨仙",
+    "weight": 25,
+    "modifiers": [
+      {
+        "stat": "atk",
+        "value": 0.2
+      }
+    ],
+    "desc": "一剑陨仙，威压诸天。"
+  },
+  "7082": {
+    "name": "惊雷",
+    "weight": 25,
+    "modifiers": [
+      {
+        "stat": "crit",
+        "value": 0.4
+      }
+    ],
+    "desc": "惊雷一落，万物震颤。"
+  },
+  "7083": {
+    "name": "承影",
+    "weight": 25,
+    "modifiers": [
+      {
+        "stat": "atk",
+        "value": 0.1
+      },
+      {
+        "stat": "crit",
+        "value": 0.2
+      }
+    ],
+    "desc": "承影无形，剑意难觅。"
+  },
+  "7091": {
+    "name": "无影剑",
+    "weight": 15,
+    "modifiers": [
+      {
+        "stat": "atk",
+        "value": 0.12
+      },
+      {
+        "stat": "crit",
+        "value": 0.24
+      },
+      {
+        "stat": "pen",
+        "value": 0.08
+      }
+    ],
+    "desc": "无影无形，杀人不见。"
+  },
+  "7092": {
+    "name": "风云幡",
+    "weight": 15,
+    "modifiers": [
+      {
+        "stat": "crit",
+        "value": 0.48
+      }
+    ],
+    "desc": "风云际会，幡动千里。"
+  },
+  "7093": {
+    "name": "青竹蜂云剑",
+    "weight": 15,
+    "modifiers": [
+      {
+        "stat": "atk",
+        "value": 0.24
+      },
+      {
+        "stat": "pen",
+        "value": 0.08
+      }
+    ],
+    "desc": "青竹为鞘，蜂云剑出。"
+  }
+}

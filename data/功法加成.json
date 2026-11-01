@@ -1,0 +1,1219 @@
+{
+  "9001": {
+    "name": "吐纳功法",
+    "weight": 100,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.03
+      },
+      {
+        "stat": "mp",
+        "value": 0.02
+      },
+      {
+        "stat": "atk",
+        "value": 0.03
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.02
+      }
+    ],
+    "desc": "吐故纳新，筑基之本。"
+  },
+  "9002": {
+    "name": "冰心诀",
+    "weight": 100,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.06
+      },
+      {
+        "stat": "mp",
+        "value": 0.02
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.02
+      }
+    ],
+    "desc": "冰心一片，道心不染尘。"
+  },
+  "9003": {
+    "name": "飞云劲",
+    "weight": 100,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.03
+      },
+      {
+        "stat": "mp",
+        "value": 0.02
+      },
+      {
+        "stat": "atk",
+        "value": 0.05
+      }
+    ],
+    "desc": "劲如飞云，轻灵飘渺。"
+  },
+  "9004": {
+    "name": "沛然决",
+    "weight": 100,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.03
+      },
+      {
+        "stat": "mp",
+        "value": 0.02
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.05
+      }
+    ],
+    "desc": "沛然之气，源源不绝。"
+  },
+  "9005": {
+    "name": "练体术",
+    "weight": 100,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.03
+      },
+      {
+        "stat": "mp",
+        "value": 0.02
+      },
+      {
+        "stat": "atk",
+        "value": 0.05
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.05
+      }
+    ],
+    "desc": "熬炼筋骨，身如铁石。"
+  },
+  "9011": {
+    "name": "禾山经",
+    "weight": 90,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.06
+      },
+      {
+        "stat": "mp",
+        "value": 0.04
+      },
+      {
+        "stat": "atk",
+        "value": 0.06
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.04
+      }
+    ],
+    "desc": "禾山经典，中正平和。"
+  },
+  "9012": {
+    "name": "浪击决",
+    "weight": 90,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.06
+      },
+      {
+        "stat": "mp",
+        "value": 0.04
+      },
+      {
+        "stat": "atk",
+        "value": 0.1
+      }
+    ],
+    "desc": "气如浪击，层层叠叠。"
+  },
+  "9013": {
+    "name": "地元炼体功",
+    "weight": 90,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.06
+      },
+      {
+        "stat": "mp",
+        "value": 0.04
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.1
+      }
+    ],
+    "desc": "借地元之力，淬炼肉身。"
+  },
+  "9014": {
+    "name": "上青诀",
+    "weight": 90,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.1
+      },
+      {
+        "stat": "mp",
+        "value": 0.04
+      },
+      {
+        "stat": "atk",
+        "value": 0.06
+      }
+    ],
+    "desc": "上善若水，青出于蓝。"
+  },
+  "9099": {
+    "name": "弄焰诀",
+    "weight": 90,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.06
+      },
+      {
+        "stat": "mp",
+        "value": 0.04
+      },
+      {
+        "stat": "atk",
+        "value": 0.09
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.06
+      }
+    ],
+    "desc": "指尖弄焰，控火随心。"
+  },
+  "9100": {
+    "name": "化焰诀",
+    "weight": 90,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.06
+      },
+      {
+        "stat": "mp",
+        "value": 0.04
+      },
+      {
+        "stat": "atk",
+        "value": 0.09
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.06
+      }
+    ],
+    "desc": "化焰为气，绵绵不绝。"
+  },
+  "9101": {
+    "name": "长生诀",
+    "weight": 80,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.1
+      },
+      {
+        "stat": "mp",
+        "value": 0.06
+      },
+      {
+        "stat": "atk",
+        "value": 0.04
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.1
+      }
+    ],
+    "desc": "长生久视，延年益寿。"
+  },
+  "9102": {
+    "name": "烈焰诀",
+    "weight": 80,
+    "modifiers": [
+      {
+        "stat": "mp",
+        "value": 0.06
+      },
+      {
+        "stat": "atk",
+        "value": 0.2
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.04
+      }
+    ],
+    "desc": "烈焰焚身，勇猛精进。"
+  },
+  "9103": {
+    "name": "幽魂录",
+    "weight": 80,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.2
+      },
+      {
+        "stat": "mp",
+        "value": 0.06
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.04
+      }
+    ],
+    "desc": "幽魂为引，诡秘莫测。"
+  },
+  "9104": {
+    "name": "魑魅鬼卷",
+    "weight": 80,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.1
+      },
+      {
+        "stat": "mp",
+        "value": 0.06
+      },
+      {
+        "stat": "atk",
+        "value": 0.1
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.04
+      }
+    ],
+    "desc": "魑魅之术，阴气森森。"
+  },
+  "9200": {
+    "name": "夺灵诀",
+    "weight": 80,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.1
+      },
+      {
+        "stat": "mp",
+        "value": 0.06
+      },
+      {
+        "stat": "atk",
+        "value": 0.15
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.04
+      }
+    ],
+    "desc": "夺灵取精，损人利己。"
+  },
+  "9201": {
+    "name": "万木诀",
+    "weight": 70,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.1
+      },
+      {
+        "stat": "mp",
+        "value": 0.1
+      },
+      {
+        "stat": "atk",
+        "value": 0.1
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.1
+      }
+    ],
+    "desc": "万木逢春，生机盎然。"
+  },
+  "9202": {
+    "name": "真阳功",
+    "weight": 70,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.2
+      },
+      {
+        "stat": "mp",
+        "value": 0.1
+      },
+      {
+        "stat": "atk",
+        "value": 0.05
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.05
+      }
+    ],
+    "desc": "真阳护体，百邪不侵。"
+  },
+  "9203": {
+    "name": "龟息术",
+    "weight": 70,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.1
+      },
+      {
+        "stat": "mp",
+        "value": 0.1
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.2
+      }
+    ],
+    "desc": "龟息绵绵，气若游丝。"
+  },
+  "9204": {
+    "name": "天晶诀",
+    "weight": 70,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.1
+      },
+      {
+        "stat": "mp",
+        "value": 0.1
+      },
+      {
+        "stat": "atk",
+        "value": 0.2
+      }
+    ],
+    "desc": "天晶淬体，晶莹剔透。"
+  },
+  "9300": {
+    "name": "五府锻元诀",
+    "weight": 70,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.1
+      },
+      {
+        "stat": "mp",
+        "value": 0.1
+      },
+      {
+        "stat": "atk",
+        "value": 0.1
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.15
+      }
+    ],
+    "desc": "锻五府之元，固本培元。"
+  },
+  "9301": {
+    "name": "水灵妙法",
+    "weight": 60,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.2
+      },
+      {
+        "stat": "mp",
+        "value": 0.1
+      },
+      {
+        "stat": "atk",
+        "value": 0.2
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.1
+      }
+    ],
+    "desc": "水灵妙法，至柔至刚。"
+  },
+  "9302": {
+    "name": "五藏炼尘功",
+    "weight": 60,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.2
+      },
+      {
+        "stat": "mp",
+        "value": 0.1
+      },
+      {
+        "stat": "atk",
+        "value": 0.1
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.2
+      }
+    ],
+    "desc": "炼五藏之尘，澄澈身心。"
+  },
+  "9303": {
+    "name": "游神御水诀",
+    "weight": 60,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.2
+      },
+      {
+        "stat": "mp",
+        "value": 0.1
+      },
+      {
+        "stat": "atk",
+        "value": 0.3
+      }
+    ],
+    "desc": "游神御水，如鱼得水。"
+  },
+  "9304": {
+    "name": "聚尘诀",
+    "weight": 60,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.4
+      },
+      {
+        "stat": "mp",
+        "value": 0.1
+      },
+      {
+        "stat": "atk",
+        "value": 0.1
+      }
+    ],
+    "desc": "聚尘为力，积少成多。"
+  },
+  "9400": {
+    "name": "流光真诀",
+    "weight": 60,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.2
+      },
+      {
+        "stat": "mp",
+        "value": 0.1
+      },
+      {
+        "stat": "atk",
+        "value": 0.2
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.1
+      }
+    ],
+    "desc": "流光遁影，迅疾如电。"
+  },
+  "9401": {
+    "name": "混元引气诀",
+    "weight": 50,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.2
+      },
+      {
+        "stat": "mp",
+        "value": 0.2
+      },
+      {
+        "stat": "atk",
+        "value": 0.2
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.2
+      }
+    ],
+    "desc": "混元一气，贯通百脉。"
+  },
+  "9402": {
+    "name": "焚心诀",
+    "weight": 50,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.2
+      },
+      {
+        "stat": "mp",
+        "value": 0.2
+      },
+      {
+        "stat": "atk",
+        "value": 0.05
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.235
+      }
+    ],
+    "desc": "焚心励志，破而后立。"
+  },
+  "9403": {
+    "name": "怒涛诀",
+    "weight": 50,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.2
+      },
+      {
+        "stat": "mp",
+        "value": 0.2
+      },
+      {
+        "stat": "atk",
+        "value": 0.35
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.05
+      }
+    ],
+    "desc": "怒涛之势，一往无前。"
+  },
+  "9404": {
+    "name": "三才化甲诀",
+    "weight": 50,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.4
+      },
+      {
+        "stat": "mp",
+        "value": 0.2
+      },
+      {
+        "stat": "atk",
+        "value": 0.1
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.1
+      }
+    ],
+    "desc": "三才化甲，护体无形。"
+  },
+  "9500": {
+    "name": "混元尘引录",
+    "weight": 50,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.2
+      },
+      {
+        "stat": "mp",
+        "value": 0.2
+      },
+      {
+        "stat": "atk",
+        "value": 0.3
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.2
+      }
+    ],
+    "desc": "混元引尘，化繁为简。"
+  },
+  "9501": {
+    "name": "紫阳混元劲",
+    "weight": 40,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.2
+      },
+      {
+        "stat": "mp",
+        "value": 0.2
+      },
+      {
+        "stat": "atk",
+        "value": 0.2
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.2
+      }
+    ],
+    "desc": "紫阳混元，刚柔并济。"
+  },
+  "9502": {
+    "name": "浑天术",
+    "weight": 40,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.2
+      },
+      {
+        "stat": "mp",
+        "value": 0.2
+      },
+      {
+        "stat": "atk",
+        "value": 0.05
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.235
+      }
+    ],
+    "desc": "浑天一气，周流不息。"
+  },
+  "9503": {
+    "name": "七杀剑诀",
+    "weight": 40,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.2
+      },
+      {
+        "stat": "mp",
+        "value": 0.2
+      },
+      {
+        "stat": "atk",
+        "value": 0.35
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.05
+      }
+    ],
+    "desc": "七杀剑气，凌厉无匹。"
+  },
+  "9504": {
+    "name": "重水普渡诀",
+    "weight": 40,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.4
+      },
+      {
+        "stat": "mp",
+        "value": 0.2
+      },
+      {
+        "stat": "atk",
+        "value": 0.1
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.1
+      }
+    ],
+    "desc": "重水普渡，厚德载物。"
+  },
+  "9600": {
+    "name": "九龙引雷诀",
+    "weight": 40,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.2
+      },
+      {
+        "stat": "mp",
+        "value": 0.2
+      },
+      {
+        "stat": "atk",
+        "value": 0.3
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.2
+      }
+    ],
+    "desc": "九龙引雷，天威赫赫。"
+  },
+  "9601": {
+    "name": "大罗千幻诀",
+    "weight": 30,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.4
+      },
+      {
+        "stat": "mp",
+        "value": 0.4
+      },
+      {
+        "stat": "atk",
+        "value": 0.4
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.4
+      }
+    ],
+    "desc": "大罗千幻，变化无穷。"
+  },
+  "9602": {
+    "name": "神威录",
+    "weight": 30,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.4
+      },
+      {
+        "stat": "mp",
+        "value": 0.4
+      },
+      {
+        "stat": "atk",
+        "value": 0.2
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.6
+      }
+    ],
+    "desc": "神威赫赫，震慑八荒。"
+  },
+  "9603": {
+    "name": "幻影神行诀",
+    "weight": 30,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.4
+      },
+      {
+        "stat": "mp",
+        "value": 0.4
+      },
+      {
+        "stat": "atk",
+        "value": 0.6
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.2
+      }
+    ],
+    "desc": "幻影神行，来去无踪。"
+  },
+  "9604": {
+    "name": "天星润水诀",
+    "weight": 30,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.8
+      },
+      {
+        "stat": "mp",
+        "value": 0.4
+      },
+      {
+        "stat": "atk",
+        "value": 0.2
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.2
+      }
+    ],
+    "desc": "天星润水，清灵涤荡。"
+  },
+  "9700": {
+    "name": "太乙玄功",
+    "weight": 30,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.4
+      },
+      {
+        "stat": "mp",
+        "value": 0.4
+      },
+      {
+        "stat": "atk",
+        "value": 0.5
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.5
+      }
+    ],
+    "desc": "太乙玄功，玄之又玄。"
+  },
+  "9701": {
+    "name": "朝元御金诀",
+    "weight": 25,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.5
+      },
+      {
+        "stat": "mp",
+        "value": 0.5
+      },
+      {
+        "stat": "atk",
+        "value": 0.5
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.5
+      }
+    ],
+    "desc": "朝元御金，锋芒毕露。"
+  },
+  "9702": {
+    "name": "太上化龙诀",
+    "weight": 25,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.5
+      },
+      {
+        "stat": "mp",
+        "value": 0.5
+      },
+      {
+        "stat": "atk",
+        "value": 0.3
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.7
+      }
+    ],
+    "desc": "太上化龙，飞天遁地。"
+  },
+  "9703": {
+    "name": "玄阳哺焰诀",
+    "weight": 25,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.5
+      },
+      {
+        "stat": "mp",
+        "value": 0.5
+      },
+      {
+        "stat": "atk",
+        "value": 0.7
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.3
+      }
+    ],
+    "desc": "玄阳哺焰，生生不息。"
+  },
+  "9704": {
+    "name": "太阴六虚功",
+    "weight": 25,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.9
+      },
+      {
+        "stat": "mp",
+        "value": 0.5
+      },
+      {
+        "stat": "atk",
+        "value": 0.3
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.3
+      }
+    ],
+    "desc": "太阴六虚，虚实难辨。"
+  },
+  "9800": {
+    "name": "三阳玄火变",
+    "weight": 25,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.5
+      },
+      {
+        "stat": "mp",
+        "value": 0.5
+      },
+      {
+        "stat": "atk",
+        "value": 0.6
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.6
+      }
+    ],
+    "desc": "三阳玄火，变化万千。"
+  },
+  "9801": {
+    "name": "玄武吐纳术",
+    "weight": 20,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 1.5
+      },
+      {
+        "stat": "mp",
+        "value": 0.5
+      },
+      {
+        "stat": "atk",
+        "value": 0.6
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.7
+      }
+    ],
+    "desc": "玄武吐纳，稳如磐石。"
+  },
+  "9802": {
+    "name": "太上化龙真诀",
+    "weight": 20,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.2
+      },
+      {
+        "stat": "mp",
+        "value": 0.2
+      },
+      {
+        "stat": "atk",
+        "value": 0.2
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.9
+      }
+    ],
+    "desc": "化龙真诀，直指大道。"
+  },
+  "9803": {
+    "name": "煮海诀",
+    "weight": 20,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.5
+      },
+      {
+        "stat": "mp",
+        "value": 0.5
+      },
+      {
+        "stat": "atk",
+        "value": 0.9
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.7
+      }
+    ],
+    "desc": "煮海之势，气吞山河。"
+  },
+  "9804": {
+    "name": "万尘归灵诀",
+    "weight": 20,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 1
+      },
+      {
+        "stat": "mp",
+        "value": 1
+      },
+      {
+        "stat": "atk",
+        "value": 0.6
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.7
+      }
+    ],
+    "desc": "万尘归灵，返本还源。"
+  },
+  "9900": {
+    "name": "玄清天衍录",
+    "weight": 20,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.1
+      },
+      {
+        "stat": "mp",
+        "value": 0.2
+      },
+      {
+        "stat": "atk",
+        "value": 0.8
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.8
+      }
+    ],
+    "desc": "玄清天衍，窥测天机。"
+  },
+  "9901": {
+    "name": "万象诀",
+    "weight": 20,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.6
+      },
+      {
+        "stat": "mp",
+        "value": 2
+      },
+      {
+        "stat": "atk",
+        "value": 0.6
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.7
+      }
+    ],
+    "desc": "万象更新，包罗万象。"
+  },
+  "9910": {
+    "name": "元磁神光",
+    "weight": 15,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.9
+      },
+      {
+        "stat": "mp",
+        "value": 0.9
+      },
+      {
+        "stat": "atk",
+        "value": 0.9
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.9
+      }
+    ],
+    "desc": "元磁神光，摄物无形。"
+  },
+  "9911": {
+    "name": "天罗真功",
+    "weight": 15,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 2
+      },
+      {
+        "stat": "mp",
+        "value": 2
+      },
+      {
+        "stat": "atk",
+        "value": 0.8
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 0.8
+      }
+    ],
+    "desc": "天罗地网，无处可逃。"
+  },
+  "9912": {
+    "name": "托天魔功",
+    "weight": 15,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "value": 0.6
+      },
+      {
+        "stat": "mp",
+        "value": 0.6
+      },
+      {
+        "stat": "atk",
+        "value": 0.8
+      },
+      {
+        "stat": "cultivateSpeed",
+        "value": 1
+      }
+    ],
+    "desc": "托天魔功，力能擎天。"
+  }
+}

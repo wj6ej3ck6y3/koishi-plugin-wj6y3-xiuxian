@@ -1,0 +1,14 @@
+{
+  "人阶下品": { "weight": 100, "color": "#888888" },
+  "人阶上品": { "weight": 90,  "color": "#44AA44" },
+  "黄阶下品": { "weight": 80,  "color": "#4477DD" },
+  "黄阶上品": { "weight": 70,  "color": "#8844DD" },
+  "玄阶下品": { "weight": 60,  "color": "#DD8844" },
+  "玄阶上品": { "weight": 50,  "color": "#DD4444" },
+  "地阶下品": { "weight": 40,  "color": "#DD2299" },
+  "地阶上品": { "weight": 30,  "color": "#FF4444" },
+  "天阶下品": { "weight": 25,  "color": "#FF8800" },
+  "天阶上品": { "weight": 20,  "color": "#FFCC00" },
+  "仙阶下品": { "weight": 15,  "color": "#44FFFF" },
+  "仙阶上品": { "weight": 10,  "color": "#FF44FF" }
+}

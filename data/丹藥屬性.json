@@ -1,0 +1,425 @@
+{
+  "1101": {
+    "name": "生骨丹",
+    "tag": "回复丹",
+    "type": "pill",
+    "weight": 49,
+    "realm": 2,
+    "usePerTime": 1,
+    "dailyLimit": 10,
+    "totalStock": 999999,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "mode": "pct",
+        "value": 0.05
+      }
+    ],
+    "price": {
+      "buy": 1000,
+      "sell": 100
+    },
+    "desc": "接骨续筋，服之气血渐复。回复状态的5%，练气境以上可以使用！"
+  },
+  "1102": {
+    "name": "化瘀丹",
+    "tag": "回复丹",
+    "type": "pill",
+    "weight": 46,
+    "realm": 5,
+    "usePerTime": 1,
+    "dailyLimit": 10,
+    "totalStock": 999999,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "mode": "pct",
+        "value": 0.10
+      }
+    ],
+    "price": {
+      "buy": 1000,
+      "sell": 100
+    },
+    "desc": "化散淤血，通经活络。回复状态的10%，筑基境以上可以使用！"
+  },
+  "1103": {
+    "name": "固元丹",
+    "tag": "回复丹",
+    "type": "pill",
+    "weight": 43,
+    "realm": 8,
+    "usePerTime": 1,
+    "dailyLimit": 10,
+    "totalStock": 999999,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "mode": "pct",
+        "value": 0.15
+      }
+    ],
+    "price": {
+      "buy": 1000,
+      "sell": 100
+    },
+    "desc": "固本培元，稳守根基。回复状态的15%，结丹境以上可以使用！"
+  },
+  "1104": {
+    "name": "培元丹",
+    "tag": "回复丹",
+    "type": "pill",
+    "weight": 40,
+    "realm": 11,
+    "usePerTime": 1,
+    "dailyLimit": 10,
+    "totalStock": 999999,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "mode": "pct",
+        "value": 0.20
+      }
+    ],
+    "price": {
+      "buy": 1000,
+      "sell": 100
+    },
+    "desc": "滋养元气，温润丹田。回复状态的20%，元婴境以上可以使用！"
+  },
+  "1105": {
+    "name": "黄龙丹",
+    "tag": "回复丹",
+    "type": "pill",
+    "weight": 37,
+    "realm": 14,
+    "usePerTime": 1,
+    "dailyLimit": 10,
+    "totalStock": 999999,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "mode": "pct",
+        "value": 0.25
+      }
+    ],
+    "price": {
+      "buy": 1000,
+      "sell": 100
+    },
+    "desc": "黄龙精气，生机勃发。回复状态的25%，化神境以上可以使用！"
+  },
+  "1106": {
+    "name": "回元丹",
+    "tag": "回复丹",
+    "type": "pill",
+    "weight": 34,
+    "realm": 17,
+    "usePerTime": 1,
+    "dailyLimit": 10,
+    "totalStock": 999999,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "mode": "pct",
+        "value": 0.30
+      }
+    ],
+    "price": {
+      "buy": 1000,
+      "sell": 100
+    },
+    "desc": "回元复本，气贯周身。回复状态的30%，炼虚境以上可以使用！"
+  },
+  "1107": {
+    "name": "回春丹",
+    "tag": "回复丹",
+    "type": "pill",
+    "weight": 31,
+    "realm": 20,
+    "usePerTime": 1,
+    "dailyLimit": 10,
+    "totalStock": 999999,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "mode": "pct",
+        "value": 0.35
+      }
+    ],
+    "price": {
+      "buy": 1000,
+      "sell": 100
+    },
+    "desc": "春意回返，枯木逢生。回复状态的35%，合体境以上可以使用！"
+  },
+  "1108": {
+    "name": "养元丹",
+    "tag": "回复丹",
+    "type": "pill",
+    "weight": 28,
+    "realm": 23,
+    "usePerTime": 1,
+    "dailyLimit": 10,
+    "totalStock": 999999,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "mode": "pct",
+        "value": 0.40
+      }
+    ],
+    "price": {
+      "buy": 1000,
+      "sell": 100
+    },
+    "desc": "养元固气，绵长不绝。回复状态的40%，大乘境以上可以使用！"
+  },
+  "1109": {
+    "name": "太元真丹",
+    "tag": "回复丹",
+    "type": "pill",
+    "weight": 25,
+    "realm": 26,
+    "usePerTime": 1,
+    "dailyLimit": 10,
+    "totalStock": 999999,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "mode": "pct",
+        "value": 0.45
+      }
+    ],
+    "price": {
+      "buy": 1000,
+      "sell": 100
+    },
+    "desc": "太元真气，沛然而生。回复状态的45%，渡劫境以上可以使用！"
+  },
+  "1110": {
+    "name": "九阳真丹",
+    "tag": "回复丹",
+    "type": "pill",
+    "weight": 22,
+    "realm": 29,
+    "usePerTime": 1,
+    "dailyLimit": 10,
+    "totalStock": 999999,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "mode": "pct",
+        "value": 0.50
+      }
+    ],
+    "price": {
+      "buy": 1000,
+      "sell": 100
+    },
+    "desc": "九阳归元，气血如潮。回复状态的50%，半步真仙以上可以使用！"
+  },
+  "1111": {
+    "name": "归藏灵丹",
+    "tag": "回复丹",
+    "type": "pill",
+    "weight": 18,
+    "realm": 33,
+    "usePerTime": 1,
+    "dailyLimit": 10,
+    "totalStock": 999999,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "mode": "pct",
+        "value": 0.60
+      }
+    ],
+    "price": {
+      "buy": 1000,
+      "sell": 100
+    },
+    "desc": "归藏于窍，灵力尽复。回复状态的60%，金仙境以上可以使用！"
+  },
+  "1112": {
+    "name": "天命血凝丹",
+    "tag": "回复丹",
+    "type": "pill",
+    "weight": 18,
+    "realm": 33,
+    "usePerTime": 1,
+    "dailyLimit": 10,
+    "totalStock": 999999,
+    "modifiers": [
+      {
+        "stat": "hp",
+        "mode": "pct",
+        "value": 1.0
+      },
+      {
+        "stat": "mp",
+        "mode": "pct",
+        "value": 1.0
+      }
+    ],
+    "price": {
+      "buy": 5000,
+      "sell": 500
+    },
+    "desc": "天命所归，气血尽复。回复全部状态，金仙境以上可以使用！"
+  },
+  "1500": {
+    "name": "冰心丹",
+    "tag": "突破丹",
+    "type": "pill",
+    "weight": 34,
+    "realm": 17,
+    "usePerTime": 1,
+    "dailyLimit": 10,
+    "totalStock": 100,
+    "modifiers": [
+      {
+        "stat": "breakthroughRate",
+        "mode": "flat",
+        "value": 0.01
+      }
+    ],
+    "price": {
+      "buy": 5000,
+      "sell": 500
+    },
+    "desc": "冰心一片，杂念尽消。使當前境界突破成功几率增加1%，炼虚境以上可使用"
+  },
+  "1501": {
+    "name": "明心丹",
+    "tag": "突破丹",
+    "type": "pill",
+    "weight": 31,
+    "realm": 20,
+    "usePerTime": 1,
+    "dailyLimit": 10,
+    "totalStock": 100,
+    "modifiers": [
+      {
+        "stat": "breakthroughRate",
+        "mode": "flat",
+        "value": 0.01
+      }
+    ],
+    "price": {
+      "buy": 5000,
+      "sell": 500
+    },
+    "desc": "明心见性，道心澄澈。使當前境界突破成功几率增加1%，合体境以上可使用"
+  },
+  "1502": {
+    "name": "幻心玄丹",
+    "tag": "突破丹",
+    "type": "pill",
+    "weight": 28,
+    "realm": 23,
+    "usePerTime": 1,
+    "dailyLimit": 10,
+    "totalStock": 100,
+    "modifiers": [
+      {
+        "stat": "breakthroughRate",
+        "mode": "flat",
+        "value": 0.01
+      }
+    ],
+    "price": {
+      "buy": 5000,
+      "sell": 500
+    },
+    "desc": "幻境炼心，勘破虚妄。使當前境界突破成功几率增加1%，大乘境以上可使用"
+  },
+  "1503": {
+    "name": "鬼面炼心丹",
+    "tag": "突破丹",
+    "type": "pill",
+    "weight": 25,
+    "realm": 26,
+    "usePerTime": 1,
+    "dailyLimit": 10,
+    "totalStock": 100,
+    "modifiers": [
+      {
+        "stat": "breakthroughRate",
+        "mode": "flat",
+        "value": 0.01
+      }
+    ],
+    "price": {
+      "buy": 5000,
+      "sell": 500
+    },
+    "desc": "鬼面炼心，磨砺心志。使當前境界突破成功几率增加1%，渡劫境以上可使用"
+  },
+  "1504": {
+    "name": "少阴清灵丹",
+    "tag": "突破丹",
+    "type": "pill",
+    "weight": 21,
+    "realm": 30,
+    "usePerTime": 1,
+    "dailyLimit": 10,
+    "totalStock": 100,
+    "modifiers": [
+      {
+        "stat": "breakthroughRate",
+        "mode": "flat",
+        "value": 0.01
+      }
+    ],
+    "price": {
+      "buy": 5000,
+      "sell": 500
+    },
+    "desc": "少阴清灵，涤荡心神。使當前境界突破成功几率增加1%，真仙境以上可使用"
+  },
+  "1505": {
+    "name": "天命炼心丹",
+    "tag": "突破丹",
+    "type": "pill",
+    "weight": 18,
+    "realm": 33,
+    "usePerTime": 1,
+    "dailyLimit": 10,
+    "totalStock": 100,
+    "modifiers": [
+      {
+        "stat": "breakthroughRate",
+        "mode": "flat",
+        "value": 0.01
+      }
+    ],
+    "price": {
+      "buy": 5000,
+      "sell": 500
+    },
+    "desc": "天命炼心，直指大道。使當前境界突破成功几率增加1%，金仙境以上可使用"
+  },
+  "1999": {
+    "name": "渡厄丹",
+    "tag": "突破丹",
+    "type": "pill",
+    "weight": 24,
+    "realm": 1,
+    "usePerTime": 1,
+    "dailyLimit": 10,
+    "totalStock": 100,
+    "modifiers": [
+      {
+        "stat": "breakthroughLoss",
+        "mode": "flat",
+        "value": -1
+      }
+    ],
+    "price": {
+      "buy": 10000,
+      "sell": 1000
+    },
+    "desc": "渡厄消灾，一往无前。使下一次突破丢失的修为减少为0！"
+  }
+}

@@ -1,0 +1,956 @@
+{
+  "1400": {
+    "name": "筑基丹",
+    "tag": "大突破丹",
+    "type": "pill",
+    "weight": 47,
+    "realm": "4",
+    "modifiers": [
+      {
+        "stat": "breakthroughBigRate",
+        "mode": "flat",
+        "value": 30
+      }
+    ],
+    "craft": {
+      "timeSec": 60,
+      "exp": 10,
+      "successCap": 100,
+      "mainType": 2,
+      "mainCount": 2,
+      "auxType": 4,
+      "auxCount": 2
+    },
+    "maxUse": 1,
+    "dayNum": 1,
+    "allNum": 1,
+    "desc": "筑道之基，丹成入道。使突破到筑基境的概率提升30%，只可使用1颗！"
+  },
+  "1401": {
+    "name": "聚顶丹",
+    "tag": "大突破丹",
+    "type": "pill",
+    "weight": 44,
+    "realm": "7",
+    "modifiers": [
+      {
+        "stat": "breakthroughBigRate",
+        "mode": "flat",
+        "value": 20
+      }
+    ],
+    "craft": {
+      "timeSec": 60,
+      "exp": 10,
+      "successCap": 100,
+      "mainType": 2,
+      "mainCount": 4,
+      "auxType": 4,
+      "auxCount": 4
+    },
+    "maxUse": 1,
+    "dayNum": 1,
+    "allNum": 1,
+    "desc": "聚气于顶，凝丹之始。使突破到结丹境的概率提升20%，只可使用1颗！"
+  },
+  "1402": {
+    "name": "朝元丹",
+    "tag": "大突破丹",
+    "type": "pill",
+    "weight": 44,
+    "realm": "7",
+    "modifiers": [
+      {
+        "stat": "breakthroughBigRate",
+        "mode": "flat",
+        "value": 20
+      }
+    ],
+    "craft": {
+      "timeSec": 60,
+      "exp": 10,
+      "successCap": 100,
+      "mainType": 2,
+      "mainCount": 8,
+      "auxType": 4,
+      "auxCount": 8
+    },
+    "maxUse": 1,
+    "dayNum": 1,
+    "allNum": 1,
+    "desc": "朝元归真，丹道正途。使突破到结丹境的概率提升20%，只可使用1颗！"
+  },
+  "1403": {
+    "name": "锻脉丹",
+    "tag": "大突破丹",
+    "type": "pill",
+    "weight": 41,
+    "realm": "10",
+    "modifiers": [
+      {
+        "stat": "breakthroughBigRate",
+        "mode": "flat",
+        "value": 20
+      }
+    ],
+    "craft": {
+      "timeSec": 60,
+      "exp": 10,
+      "successCap": 100,
+      "mainType": 2,
+      "mainCount": 12,
+      "auxType": 4,
+      "auxCount": 12
+    },
+    "maxUse": 1,
+    "dayNum": 1,
+    "allNum": 1,
+    "desc": "锻脉通络，破境之基。使突破到元婴境的概率提升20%，只可使用1颗！"
+  },
+  "1404": {
+    "name": "护脉丹",
+    "tag": "大突破丹",
+    "type": "pill",
+    "weight": 41,
+    "realm": "10",
+    "modifiers": [
+      {
+        "stat": "breakthroughBigRate",
+        "mode": "flat",
+        "value": 20
+      }
+    ],
+    "craft": {
+      "timeSec": 60,
+      "exp": 10,
+      "successCap": 100,
+      "mainType": 2,
+      "mainCount": 16,
+      "auxType": 4,
+      "auxCount": 16
+    },
+    "maxUse": 1,
+    "dayNum": 1,
+    "allNum": 1,
+    "desc": "护脉周全，安然渡劫。使突破到元婴境的概率提升20%，只可使用1颗！"
+  },
+  "1405": {
+    "name": "天命淬体丹",
+    "tag": "大突破丹",
+    "type": "pill",
+    "weight": 38,
+    "realm": "13",
+    "modifiers": [
+      {
+        "stat": "breakthroughBigRate",
+        "mode": "flat",
+        "value": 10
+      }
+    ],
+    "craft": {
+      "timeSec": 60,
+      "exp": 10,
+      "successCap": 100,
+      "mainType": 2,
+      "mainCount": 20,
+      "auxType": 4,
+      "auxCount": 20
+    },
+    "maxUse": 1,
+    "dayNum": 1,
+    "allNum": 1,
+    "desc": "天命所归，淬体通神。使突破到化神境的概率提升10%，只可使用1颗！"
+  },
+  "1406": {
+    "name": "澄心塑魂丹",
+    "tag": "大突破丹",
+    "type": "pill",
+    "weight": 38,
+    "realm": "13",
+    "modifiers": [
+      {
+        "stat": "breakthroughBigRate",
+        "mode": "flat",
+        "value": 10
+      }
+    ],
+    "craft": {
+      "timeSec": 60,
+      "exp": 10,
+      "successCap": 100,
+      "mainType": 2,
+      "mainCount": 24,
+      "auxType": 4,
+      "auxCount": 24
+    },
+    "maxUse": 1,
+    "dayNum": 1,
+    "allNum": 1,
+    "desc": "澄心塑魂，道心稳固。使突破到化神境的概率提升10%，只可使用1颗！"
+  },
+  "1407": {
+    "name": "混元仙体丹",
+    "tag": "大突破丹",
+    "type": "pill",
+    "weight": 38,
+    "realm": "13",
+    "modifiers": [
+      {
+        "stat": "breakthroughBigRate",
+        "mode": "flat",
+        "value": 10
+      }
+    ],
+    "craft": {
+      "timeSec": 60,
+      "exp": 10,
+      "successCap": 100,
+      "mainType": 2,
+      "mainCount": 32,
+      "auxType": 4,
+      "auxCount": 32
+    },
+    "maxUse": 1,
+    "dayNum": 1,
+    "allNum": 1,
+    "desc": "混元仙体，脱胎换骨。使突破到化神境的概率提升10%，只可使用1颗！"
+  },
+  "1408": {
+    "name": "黑炎丹",
+    "tag": "大突破丹",
+    "type": "pill",
+    "weight": 35,
+    "realm": "16",
+    "modifiers": [
+      {
+        "stat": "breakthroughBigRate",
+        "mode": "flat",
+        "value": 10
+      }
+    ],
+    "craft": {
+      "timeSec": 60,
+      "exp": 10,
+      "successCap": 100,
+      "mainType": 2,
+      "mainCount": 48,
+      "auxType": 4,
+      "auxCount": 48
+    },
+    "maxUse": 1,
+    "dayNum": 1,
+    "allNum": 1,
+    "desc": "黑炎淬炼，破境之助。使突破到炼虚境的概率提升10%，只可使用1颗！"
+  },
+  "1409": {
+    "name": "金血丸",
+    "tag": "大突破丹",
+    "type": "pill",
+    "weight": 35,
+    "realm": "16",
+    "modifiers": [
+      {
+        "stat": "breakthroughBigRate",
+        "mode": "flat",
+        "value": 10
+      }
+    ],
+    "craft": {
+      "timeSec": 60,
+      "exp": 10,
+      "successCap": 100,
+      "mainType": 2,
+      "mainCount": 64,
+      "auxType": 4,
+      "auxCount": 64
+    },
+    "maxUse": 1,
+    "dayNum": 1,
+    "allNum": 1,
+    "desc": "金血沸腾，破境有力。使突破到炼虚境的概率提升10%，只可使用1颗！"
+  },
+  "1410": {
+    "name": "虚灵丹",
+    "tag": "大突破丹",
+    "type": "pill",
+    "weight": 32,
+    "realm": "19",
+    "modifiers": [
+      {
+        "stat": "breakthroughBigRate",
+        "mode": "flat",
+        "value": 10
+      }
+    ],
+    "craft": {
+      "timeSec": 60,
+      "exp": 10,
+      "successCap": 100,
+      "mainType": 2,
+      "mainCount": 96,
+      "auxType": 4,
+      "auxCount": 96
+    },
+    "maxUse": 1,
+    "dayNum": 1,
+    "allNum": 1,
+    "desc": "虚灵凝神，破境之钥。使突破到合体境的概率提升10%，只可使用1颗！"
+  },
+  "1411": {
+    "name": "净明丹",
+    "tag": "大突破丹",
+    "type": "pill",
+    "weight": 32,
+    "realm": "19",
+    "modifiers": [
+      {
+        "stat": "breakthroughBigRate",
+        "mode": "flat",
+        "value": 10
+      }
+    ],
+    "craft": {
+      "timeSec": 60,
+      "exp": 10,
+      "successCap": 100,
+      "mainType": 2,
+      "mainCount": 128,
+      "auxType": 4,
+      "auxCount": 128
+    },
+    "maxUse": 1,
+    "dayNum": 1,
+    "allNum": 1,
+    "desc": "净明澄澈，破境无忧。使突破到合体境的概率提升10%，只可使用1颗！"
+  },
+  "1412": {
+    "name": "安神灵液",
+    "tag": "大突破丹",
+    "type": "pill",
+    "weight": 29,
+    "realm": "22",
+    "modifiers": [
+      {
+        "stat": "breakthroughBigRate",
+        "mode": "flat",
+        "value": 10
+      }
+    ],
+    "craft": {
+      "timeSec": 60,
+      "exp": 10,
+      "successCap": 100,
+      "mainType": 2,
+      "mainCount": 160,
+      "auxType": 4,
+      "auxCount": 160
+    },
+    "maxUse": 1,
+    "dayNum": 1,
+    "allNum": 1,
+    "desc": "安神定魄，破境之辅。使突破到大乘境的概率提升10%，只可使用1颗！"
+  },
+  "1413": {
+    "name": "魇龙之血",
+    "tag": "大突破丹",
+    "type": "pill",
+    "weight": 29,
+    "realm": "22",
+    "modifiers": [
+      {
+        "stat": "breakthroughBigRate",
+        "mode": "flat",
+        "value": 10
+      }
+    ],
+    "craft": {
+      "timeSec": 60,
+      "exp": 10,
+      "successCap": 100,
+      "mainType": 2,
+      "mainCount": 192,
+      "auxType": 4,
+      "auxCount": 192
+    },
+    "maxUse": 1,
+    "dayNum": 1,
+    "allNum": 1,
+    "desc": "魇龙精血，破境之引。使突破到大乘境的概率提升10%，只可使用1颗！"
+  },
+  "1414": {
+    "name": "化劫丹",
+    "tag": "大突破丹",
+    "type": "pill",
+    "weight": 26,
+    "realm": "25",
+    "modifiers": [
+      {
+        "stat": "breakthroughBigRate",
+        "mode": "flat",
+        "value": 20
+      }
+    ],
+    "craft": {
+      "timeSec": 60,
+      "exp": 10,
+      "successCap": 100,
+      "mainType": 2,
+      "mainCount": 256,
+      "auxType": 4,
+      "auxCount": 256
+    },
+    "maxUse": 1,
+    "dayNum": 1,
+    "allNum": 1,
+    "desc": "化劫消灾，安然渡劫。使突破到渡劫境的概率提升20%，只可使用1颗！"
+  },
+  "1415": {
+    "name": "太上玄门丹",
+    "tag": "大突破丹",
+    "type": "pill",
+    "weight": 22,
+    "realm": "29",
+    "modifiers": [
+      {
+        "stat": "breakthroughBigRate",
+        "mode": "flat",
+        "value": 20
+      }
+    ],
+    "craft": {
+      "timeSec": 60,
+      "exp": 10,
+      "successCap": 100,
+      "mainType": 2,
+      "mainCount": 384,
+      "auxType": 4,
+      "auxCount": 384
+    },
+    "maxUse": 1,
+    "dayNum": 1,
+    "allNum": 1,
+    "desc": "玄门正统，破境灵丹。使突破到真仙境的概率提升20%，只可使用1颗！"
+  },
+  "1416": {
+    "name": "金仙破厄丹",
+    "tag": "大突破丹",
+    "type": "pill",
+    "weight": 19,
+    "realm": "32",
+    "modifiers": [
+      {
+        "stat": "breakthroughBigRate",
+        "mode": "flat",
+        "value": 20
+      }
+    ],
+    "craft": {
+      "timeSec": 60,
+      "exp": 10,
+      "successCap": 100,
+      "mainType": 2,
+      "mainCount": 768,
+      "auxType": 4,
+      "auxCount": 768
+    },
+    "maxUse": 1,
+    "dayNum": 1,
+    "allNum": 1,
+    "desc": "金仙破厄，一丹通天。使突破到金仙境的概率提升20%，只可使用1颗！"
+  },
+  "1417": {
+    "name": "太乙炼髓丹",
+    "tag": "大突破丹",
+    "type": "pill",
+    "weight": 16,
+    "realm": "35",
+    "modifiers": [
+      {
+        "stat": "breakthroughBigRate",
+        "mode": "flat",
+        "value": 20
+      }
+    ],
+    "craft": {
+      "timeSec": 60,
+      "exp": 10,
+      "successCap": 100,
+      "mainType": 2,
+      "mainCount": 1536,
+      "auxType": 4,
+      "auxCount": 1536
+    },
+    "maxUse": 1,
+    "dayNum": 1,
+    "allNum": 1,
+    "desc": "炼髓太乙，直指仙途。使突破到太乙境的概率提升20%，只可使用1颗！"
+  },
+  "2000": {
+    "name": "洗髓丹",
+    "tag": "修为丹",
+    "type": "pill",
+    "weight": 40,
+    "realm": "11",
+    "modifiers": [
+      {
+        "stat": "exp",
+        "mode": "flat",
+        "value": 8000
+      }
+    ],
+    "craft": {
+      "timeSec": 60,
+      "exp": 10,
+      "successCap": 100,
+      "mainType": 2,
+      "mainCount": 6,
+      "auxType": 3,
+      "auxCount": 6
+    },
+    "dayNum": 10,
+    "allNum": 200,
+    "desc": "洗髓伐骨，脱胎换骨。使用后可以增加8000点修为！"
+  },
+  "2001": {
+    "name": "养气丹",
+    "tag": "修为丹",
+    "type": "pill",
+    "weight": 37,
+    "realm": "14",
+    "modifiers": [
+      {
+        "stat": "exp",
+        "mode": "flat",
+        "value": 10000
+      }
+    ],
+    "craft": {
+      "timeSec": 60,
+      "exp": 10,
+      "successCap": 100,
+      "mainType": 2,
+      "mainCount": 12,
+      "auxType": 3,
+      "auxCount": 12
+    },
+    "dayNum": 10,
+    "allNum": 200,
+    "desc": "养气培元，循序渐进。使用后可以增加10000点修为！"
+  },
+  "2002": {
+    "name": "九转丹",
+    "tag": "修为丹",
+    "type": "pill",
+    "weight": 34,
+    "realm": "17",
+    "modifiers": [
+      {
+        "stat": "exp",
+        "mode": "flat",
+        "value": 12000
+      }
+    ],
+    "craft": {
+      "timeSec": 60,
+      "exp": 10,
+      "successCap": 100,
+      "mainType": 2,
+      "mainCount": 24,
+      "auxType": 3,
+      "auxCount": 24
+    },
+    "dayNum": 10,
+    "allNum": 200,
+    "desc": "九转功成，修为大涨。使用后可以增加12000点修为！"
+  },
+  "2003": {
+    "name": "易筋丹",
+    "tag": "修为丹",
+    "type": "pill",
+    "weight": 31,
+    "realm": "20",
+    "modifiers": [
+      {
+        "stat": "exp",
+        "mode": "flat",
+        "value": 14000
+      }
+    ],
+    "craft": {
+      "timeSec": 60,
+      "exp": 10,
+      "successCap": 100,
+      "mainType": 2,
+      "mainCount": 48,
+      "auxType": 3,
+      "auxCount": 48
+    },
+    "dayNum": 10,
+    "allNum": 200,
+    "desc": "易筋锻骨，修为精进。使用后可以增加14000点修为！"
+  },
+  "2004": {
+    "name": "天尘丹",
+    "tag": "修为丹",
+    "type": "pill",
+    "weight": 28,
+    "realm": "23",
+    "modifiers": [
+      {
+        "stat": "exp",
+        "mode": "flat",
+        "value": 16000
+      }
+    ],
+    "craft": {
+      "timeSec": 60,
+      "exp": 10,
+      "successCap": 100,
+      "mainType": 2,
+      "mainCount": 96,
+      "auxType": 3,
+      "auxCount": 96
+    },
+    "dayNum": 10,
+    "allNum": 200,
+    "desc": "天尘不染，修为精纯。使用后可以增加16000点修为！"
+  },
+  "2005": {
+    "name": "天元神丹",
+    "tag": "修为丹",
+    "type": "pill",
+    "weight": 25,
+    "realm": "26",
+    "modifiers": [
+      {
+        "stat": "exp",
+        "mode": "flat",
+        "value": 18000
+      }
+    ],
+    "craft": {
+      "timeSec": 60,
+      "exp": 10,
+      "successCap": 100,
+      "mainType": 2,
+      "mainCount": 192,
+      "auxType": 3,
+      "auxCount": 192
+    },
+    "dayNum": 10,
+    "allNum": 200,
+    "desc": "天元归真，修为大增。使用后可以增加18000点修为！"
+  },
+  "2006": {
+    "name": "太乙碧莹丹",
+    "tag": "修为丹",
+    "type": "pill",
+    "weight": 22,
+    "realm": "29",
+    "modifiers": [
+      {
+        "stat": "exp",
+        "mode": "flat",
+        "value": 20000
+      }
+    ],
+    "craft": {
+      "timeSec": 60,
+      "exp": 10,
+      "successCap": 100,
+      "mainType": 2,
+      "mainCount": 384,
+      "auxType": 3,
+      "auxCount": 384
+    },
+    "dayNum": 10,
+    "allNum": 200,
+    "desc": "碧莹太乙，修为更进。使用后可以增加20000点修为！"
+  },
+  "2007": {
+    "name": "六阳长生丹",
+    "tag": "修为丹",
+    "type": "pill",
+    "weight": 18,
+    "realm": "33",
+    "modifiers": [
+      {
+        "stat": "exp",
+        "mode": "flat",
+        "value": 30000
+      }
+    ],
+    "craft": {
+      "timeSec": 60,
+      "exp": 10,
+      "successCap": 100,
+      "mainType": 2,
+      "mainCount": 768,
+      "auxType": 3,
+      "auxCount": 768
+    },
+    "dayNum": 10,
+    "allNum": 200,
+    "desc": "六阳长生，修为绵长。使用后可以增加30000点修为！"
+  },
+  "2008": {
+    "name": "道源丹",
+    "tag": "修为丹",
+    "type": "pill",
+    "weight": 15,
+    "realm": "36",
+    "modifiers": [
+      {
+        "stat": "exp",
+        "mode": "flat",
+        "value": 40000
+      }
+    ],
+    "craft": {
+      "timeSec": 60,
+      "exp": 10,
+      "successCap": 100,
+      "mainType": 2,
+      "mainCount": 1536,
+      "auxType": 3,
+      "auxCount": 1536
+    },
+    "dayNum": 10,
+    "allNum": 200,
+    "desc": "道源归宗，修为深湛。使用后可以增加40000点修为！"
+  },
+  "2009": {
+    "name": "摄魂鬼丸",
+    "tag": "攻击丹",
+    "type": "pill",
+    "weight": 40,
+    "realm": "11",
+    "modifiers": [
+      {
+        "stat": "atk",
+        "mode": "flat",
+        "value": 720
+      }
+    ],
+    "craft": {
+      "timeSec": 60,
+      "exp": 10,
+      "successCap": 10,
+      "mainType": 2,
+      "mainCount": 6,
+      "auxType": 6,
+      "auxCount": 6
+    },
+    "dayNum": 5,
+    "allNum": 5,
+    "desc": "摄魂炼魄，攻伐大增。使用后可以永久增加720点攻击力！"
+  },
+  "2010": {
+    "name": "化煞魔丸",
+    "tag": "攻击丹",
+    "type": "pill",
+    "weight": 37,
+    "realm": "14",
+    "modifiers": [
+      {
+        "stat": "atk",
+        "mode": "flat",
+        "value": 1760
+      }
+    ],
+    "craft": {
+      "timeSec": 60,
+      "exp": 10,
+      "successCap": 100,
+      "mainType": 2,
+      "mainCount": 12,
+      "auxType": 6,
+      "auxCount": 12
+    },
+    "dayNum": 5,
+    "allNum": 5,
+    "desc": "化煞为力，攻伐锐进。使用后可以永久增加1760点攻击力！"
+  },
+  "2011": {
+    "name": "素心真丸",
+    "tag": "攻击丹",
+    "type": "pill",
+    "weight": 34,
+    "realm": "17",
+    "modifiers": [
+      {
+        "stat": "atk",
+        "mode": "flat",
+        "value": 4160
+      }
+    ],
+    "craft": {
+      "timeSec": 60,
+      "exp": 10,
+      "successCap": 100,
+      "mainType": 2,
+      "mainCount": 24,
+      "auxType": 6,
+      "auxCount": 24
+    },
+    "dayNum": 5,
+    "allNum": 5,
+    "desc": "素心凝真，攻伐愈强。使用后可以永久增加4160点攻击力！"
+  },
+  "2012": {
+    "name": "灭神古丸",
+    "tag": "攻击丹",
+    "type": "pill",
+    "weight": 31,
+    "realm": "20",
+    "modifiers": [
+      {
+        "stat": "atk",
+        "mode": "flat",
+        "value": 9600
+      }
+    ],
+    "craft": {
+      "timeSec": 60,
+      "exp": 10,
+      "successCap": 100,
+      "mainType": 2,
+      "mainCount": 48,
+      "auxType": 6,
+      "auxCount": 48
+    },
+    "dayNum": 5,
+    "allNum": 5,
+    "desc": "灭神之势，攻伐滔天。使用后可以永久增加9600点攻击力！"
+  },
+  "2013": {
+    "name": "静禅魔丸",
+    "tag": "攻击丹",
+    "type": "pill",
+    "weight": 28,
+    "realm": "23",
+    "modifiers": [
+      {
+        "stat": "atk",
+        "mode": "flat",
+        "value": 21760
+      }
+    ],
+    "craft": {
+      "timeSec": 60,
+      "exp": 10,
+      "successCap": 100,
+      "mainType": 2,
+      "mainCount": 96,
+      "auxType": 6,
+      "auxCount": 96
+    },
+    "dayNum": 5,
+    "allNum": 5,
+    "desc": "静禅入魔，攻伐倍增。使用后可以永久增加21760点攻击力！"
+  },
+  "2014": {
+    "name": "地仙玄丸",
+    "tag": "攻击丹",
+    "type": "pill",
+    "weight": 25,
+    "realm": "26",
+    "modifiers": [
+      {
+        "stat": "atk",
+        "mode": "flat",
+        "value": 48640
+      }
+    ],
+    "craft": {
+      "timeSec": 60,
+      "exp": 10,
+      "successCap": 100,
+      "mainType": 2,
+      "mainCount": 192,
+      "auxType": 6,
+      "auxCount": 192
+    },
+    "dayNum": 5,
+    "allNum": 5,
+    "desc": "地仙玄功，攻伐无匹。使用后可以永久增加48640点攻击力！"
+  },
+  "2015": {
+    "name": "消冰宝丸",
+    "tag": "攻击丹",
+    "type": "pill",
+    "weight": 22,
+    "realm": "29",
+    "modifiers": [
+      {
+        "stat": "atk",
+        "mode": "flat",
+        "value": 104840
+      }
+    ],
+    "craft": {
+      "timeSec": 60,
+      "exp": 10,
+      "successCap": 100,
+      "mainType": 2,
+      "mainCount": 384,
+      "auxType": 6,
+      "auxCount": 384
+    },
+    "dayNum": 5,
+    "allNum": 5,
+    "desc": "消冰化雪，攻伐凌厉。使用后可以永久增加104840点攻击力！"
+  },
+  "2016": {
+    "name": "无涯鬼丸",
+    "tag": "攻击丹",
+    "type": "pill",
+    "weight": 18,
+    "realm": "33",
+    "modifiers": [
+      {
+        "stat": "atk",
+        "mode": "flat",
+        "value": 304840
+      }
+    ],
+    "craft": {
+      "timeSec": 60,
+      "exp": 10,
+      "successCap": 100,
+      "mainType": 2,
+      "mainCount": 768,
+      "auxType": 6,
+      "auxCount": 768
+    },
+    "dayNum": 5,
+    "allNum": 5,
+    "desc": "无涯鬼力，攻伐无尽。使用后可以永久增加304840点攻击力！"
+  },
+  "2017": {
+    "name": "太一仙丸",
+    "tag": "攻击丹",
+    "type": "pill",
+    "weight": 15,
+    "realm": "36",
+    "modifiers": [
+      {
+        "stat": "atk",
+        "mode": "flat",
+        "value": 604840
+      }
+    ],
+    "craft": {
+      "timeSec": 60,
+      "exp": 10,
+      "successCap": 100,
+      "mainType": 2,
+      "mainCount": 1536,
+      "auxType": 6,
+      "auxCount": 1536
+    },
+    "dayNum": 5,
+    "allNum": 5,
+    "desc": "太一仙力，攻伐惊天。使用后可以永久增加604840点攻击力！"
+  }
+}

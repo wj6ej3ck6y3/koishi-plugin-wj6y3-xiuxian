@@ -1,0 +1,112 @@
+{
+  "6001": {
+    "name": "修士道袍",
+    "weight": 100,
+    "modifiers": [
+      {
+        "stat": "def",
+        "value": 0.15
+      }
+    ],
+    "desc": "可凝罡护体，寻常难伤。"
+  },
+  "6011": {
+    "name": "化尘道袍",
+    "weight": 80,
+    "modifiers": [
+      {
+        "stat": "def",
+        "value": 0.18
+      }
+    ],
+    "desc": "衣袂轻拂，尘埃不染。"
+  },
+  "6021": {
+    "name": "阴磷甲",
+    "weight": 80,
+    "modifiers": [
+      {
+        "stat": "def",
+        "value": 0.21
+      }
+    ],
+    "desc": "阴磷淬甲，暗沉而坚。"
+  },
+  "6031": {
+    "name": "御灵盾",
+    "weight": 70,
+    "modifiers": [
+      {
+        "stat": "def",
+        "value": 0.24
+      }
+    ],
+    "desc": "灵盾御体，刀剑难侵。"
+  },
+  "6041": {
+    "name": "凤血魔袍",
+    "weight": 60,
+    "modifiers": [
+      {
+        "stat": "def",
+        "value": 0.27
+      }
+    ],
+    "desc": "浸染凤血，隐现魔纹。"
+  },
+  "6051": {
+    "name": "避水法袍",
+    "weight": 50,
+    "modifiers": [
+      {
+        "stat": "def",
+        "value": 0.3
+      }
+    ],
+    "desc": "避水之能，滴水不沾。"
+  },
+  "6061": {
+    "name": "青溪法袍",
+    "weight": 40,
+    "modifiers": [
+      {
+        "stat": "def",
+        "value": 0.33
+      }
+    ],
+    "desc": "青溪环绕，清气护身。"
+  },
+  "6071": {
+    "name": "驱厄灵袍",
+    "weight": 30,
+    "modifiers": [
+      {
+        "stat": "def",
+        "value": 0.36
+      }
+    ],
+    "desc": "驱厄避凶，诸邪不近。"
+  },
+  "6081": {
+    "name": "三阳道袍",
+    "weight": 25,
+    "modifiers": [
+      {
+        "stat": "def",
+        "value": 0.39
+      }
+    ],
+    "desc": "三阳护体，正气长存。"
+  },
+  "6091": {
+    "name": "皇鳞甲",
+    "weight": 15,
+    "modifiers": [
+      {
+        "stat": "def",
+        "value": 0.42
+      }
+    ],
+    "desc": "鳞甲如皇，坚不可摧。"
+  }
+}

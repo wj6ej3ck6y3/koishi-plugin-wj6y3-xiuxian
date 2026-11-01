@@ -1,0 +1,171 @@
+import { Context } from 'koishi'
+import { getLevel } from '../data'
+import { TABLE } from '../models'
+import {
+  simulateBattle, addStone, addItem, refreshPlayerStats,
+  getNextId,
+  preparePlayerBattle,
+  recordBattle,
+  CombatUnit,
+  formatPct,
+} from '../utils'
+
+// ======================= 世界 BOSS 数值配置 =======================
+// 所有世界 BOSS 的数值集中在此，一处调优全局生效；命令逻辑只负责调度。
+// ⚠️ 若境界屬性.json 的 def 已改为「减伤%」，MAX_DEF_CAP 保持 85 即可；
+//    若 def 仍是「数值防御」，请把 MAX_DEF_CAP 改成 Infinity（避免 BOSS 防御被压成 85）。
+const WORLD_BOSS_CONFIG = {
+  MIN_LEVEL: 23,          // 保底生成的最低境界
+  NAMES: ['远古魔龙', '混沌魔猿', '幽冥鬼帝', '天罡巨蟒', '万象魔象'],
+
+  // 属性倍率（相对于境界基础）
+  HP_MULT: 10,           // 气血 = 境界基础 × 
+  ATK_MULT: 1,          // 攻击 = 境界基础 × 
+  MAX_DEF_CAP: 85,        // 减伤% 上限
+  SPD: 0,
+  // 暴击属性
+  CRIT: 0.05,
+  CRIT_DMG: 1.5,
+  PEN: 0,
+
+  // 击杀奖励（每人）
+  KILL_EXP: 500,
+  KILL_STONE: 1000,
+  KILL_DROP_ID: 1101,
+  KILL_DROP_MIN: 1,
+  KILL_DROP_MAX: 3,
+}
+
+/** 依玩家最高境界随机生成世界 BOSS 的境界等级（数字） */
+function rollWorldBossLevel(topPlayerLevelId: string): number {
+  const topLvNum = Number(topPlayerLevelId) || WORLD_BOSS_CONFIG.MIN_LEVEL
+  const maxLv = Math.max(WORLD_BOSS_CONFIG.MIN_LEVEL, topLvNum)
+  return WORLD_BOSS_CONFIG.MIN_LEVEL
+    + Math.floor(Math.random() * (maxLv - WORLD_BOSS_CONFIG.MIN_LEVEL + 1))
+}
+
+/**
+ * 依世界 BOSS 配置构建战斗单位。
+ * 每次战斗都用它重建（DB 只存进度），因此改配置后所有活跃 BOSS 立即生效。
+ */
+export function buildWorldBossUnit(name: string, levelId: string): CombatUnit {
+  const lv = getLevel(levelId) ?? getLevel('1')!
+  const hp = Math.floor(lv.hp * WORLD_BOSS_CONFIG.HP_MULT)
+  // ✅ 世界 BOSS 防御不再获得加成，直接用境界基础减伤%
+  const def = Math.min(WORLD_BOSS_CONFIG.MAX_DEF_CAP, lv.def)
+  return {
+    name,
+    hp, maxhp: hp,
+    mp: lv.mp, maxmp: lv.mp,
+    atk: Math.floor(lv.atk * WORLD_BOSS_CONFIG.ATK_MULT),
+    def,
+    spd: WORLD_BOSS_CONFIG.SPD, 
+    crit: WORLD_BOSS_CONFIG.CRIT,
+    critDmg: WORLD_BOSS_CONFIG.CRIT_DMG,
+    pen: WORLD_BOSS_CONFIG.PEN,
+  }
+}
+
+export function registerBossCommands(ctx: Context) {
+  ctx.command('世界boss帮助', 'BOSS 说明').action(() => [
+    '查看世界boss',
+    '讨伐世界boss [编号]',
+    '创建世界boss（管理）',
+  ].join('\n'))
+
+  ctx.command('创建世界boss', '生成BOSS')
+    .action(async () => {
+      const all = await ctx.database.get(TABLE.player, {}, { sort: { exp: 'desc' }, limit: 1 })
+      const topLvId = all[0]?.level || String(WORLD_BOSS_CONFIG.MIN_LEVEL)
+      const bossLv = rollWorldBossLevel(topLvId)
+      const name = WORLD_BOSS_CONFIG.NAMES[Math.floor(Math.random() * WORLD_BOSS_CONFIG.NAMES.length)]
+      const unit = buildWorldBossUnit(name, String(bossLv))
+
+      const id = await getNextId(ctx, TABLE.boss, 'id')
+      await ctx.database.create(TABLE.boss, {
+        id,
+        name, level: bossLv,
+        hp: unit.maxhp, maxHp: unit.maxhp, atk: unit.atk,
+      })
+      return `👹 世界 BOSS「${name}」已生成（境界 ${getLevel(String(bossLv))?.name}，HP ${unit.maxhp}）`
+    })
+
+  ctx.command('查看世界boss', '查看当前世界 BOSS')
+    .action(async () => {
+      const list = await ctx.database.get(TABLE.boss, {})
+      if (!list.length) return '当前没有活跃的世界 BOSS'
+      return '👹 世界 BOSS\n' + list.map((b, i) =>
+        `${i + 1}. ${b.name}（境界 ${getLevel(String(b.level))?.name}｜气血 ${b.hp}/${b.maxHp}，${formatPct(b.hp, b.maxHp)}%）`
+      ).join('\n')
+    })
+
+  ctx.command('讨伐世界boss [no:number]', '战斗')
+    .action(async ({ session }, no) => {
+      const prep = await preparePlayerBattle(ctx, session)
+      if (typeof prep === 'string') return prep
+      const { player: p, unit: me } = prep
+
+      const list = await ctx.database.get(TABLE.boss, {})
+      if (!list.length) return '暂无 BOSS'
+      const idx = (no ?? 1) - 1
+      const boss = list[idx]
+      if (!boss) return '编号不存在'
+      if (boss.hp <= 0) return '该 BOSS 已被击杀'
+
+      // ✅ 用世界 BOSS 配置重建战斗单位（DB 内的 hp/atk 覆盖为最新进度）
+      const bossUnit = buildWorldBossUnit(boss.name, String(boss.level))
+      bossUnit.hp = boss.hp
+      bossUnit.maxhp = boss.maxHp
+      bossUnit.atk = boss.atk
+      const result = simulateBattle(me, bossUnit)
+      const myDmg = Math.floor(boss.hp - bossUnit.hp)
+
+      const exist = await ctx.database.get(TABLE.bossP, { bossId: boss.id, userId: p.userId })
+      const oldDmg = exist[0]?.damage ?? 0
+      if (exist[0]) {
+        await ctx.database.set(TABLE.bossP, { bossId: boss.id, userId: p.userId }, {
+          damage: oldDmg + myDmg,
+        })
+      } else {
+        await ctx.database.create(TABLE.bossP, {
+          bossId: boss.id, userId: p.userId, platform: session.platform, damage: myDmg,
+        })
+      }
+
+      await ctx.database.set(TABLE.boss, { id: boss.id }, { hp: Math.max(0, bossUnit.hp) })
+      p.hp = me.hp
+      p.mp = me.mp
+      await refreshPlayerStats(ctx, p)
+
+      recordBattle(p.userId, {
+        ts: Date.now(),
+        title: `讨伐世界 BOSS「${boss.name}」`,
+        log: result.log,
+        winner: result.winner,
+        playerName: me.name,
+        opponentName: boss.name,
+      })
+
+      if (bossUnit.hp <= 0) {
+        const parts = await ctx.database.get(TABLE.bossP, { bossId: boss.id })
+        const rewards: string[] = []
+        for (const pt of parts) {
+          const pl = (await ctx.database.get(TABLE.player, { userId: pt.userId }))[0]
+          if (!pl) continue
+          pl.exp += WORLD_BOSS_CONFIG.KILL_EXP
+          await ctx.database.set(TABLE.player, { userId: pl.userId }, { exp: pl.exp })
+          await addStone(ctx, pl.uid, WORLD_BOSS_CONFIG.KILL_STONE)
+          rewards.push(`${pl.userName}（累计伤害 ${Math.floor(pt.damage)}）`)
+        }
+        if (result.winner === 'a') {
+          const dropRange = WORLD_BOSS_CONFIG.KILL_DROP_MAX - WORLD_BOSS_CONFIG.KILL_DROP_MIN + 1
+          const dropCount = WORLD_BOSS_CONFIG.KILL_DROP_MIN + Math.floor(Math.random() * dropRange)
+          await addItem(ctx, p.userId, WORLD_BOSS_CONFIG.KILL_DROP_ID, dropCount)
+        }
+        await ctx.database.remove(TABLE.boss, { id: boss.id })
+        await ctx.database.remove(TABLE.bossP, { bossId: boss.id })
+        return `🎉 击杀 ${boss.name}！\n参战：${rewards.join('、')}\n每人 +${WORLD_BOSS_CONFIG.KILL_EXP} 修为 +${WORLD_BOSS_CONFIG.KILL_STONE} 灵石`
+      }
+      return `⚔️ 你对 ${boss.name} 造成 ${myDmg} 伤害，剩 ${bossUnit.hp}/${boss.maxHp}（${formatPct(bossUnit.hp, boss.maxHp)}%，你的累计：${oldDmg + myDmg}）`
+    })
+}
