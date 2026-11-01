@@ -1,17 +1,36 @@
 {
   "name": "koishi-plugin-wj6y3-xiuxian",
-  "version": "1.1.3",
-  "description": "桐子的修仙遊戲插件：建號 / 修煉 / 突破 / 背包 / 宗門 / 世界BOSS / 煉丹 / 洞府 / 坊市 / 懸賞令 / 靈莊 / 秘境 / 煉體 / 傳承 / 飛升轉世，一應俱全。",
+  "version": "1.1.4",
   "main": "lib/index.js",
-  "typings": "lib/index.d.ts",
+  "types": "lib/index.d.ts",
+  "type": "commonjs",
   "files": [
     "lib",
     "data"
   ],
-  "license": "MIT",
   "scripts": {
     "build": "tsc --project tsconfig.json --emitDeclarationOnly false"
   },
+  "koishi": {
+    "description": {
+      "en": "Tongzi's cultivation game plugin: character creation / cultivation / breakthrough / backpack / sect / world boss / alchemy / cave house / market / bounty / bank / secret realm / body refining / inheritance / ascension and reincarnation, all in one.",
+      "zh": "桐子的修仙遊戲插件：建號 / 修煉 / 突破 / 背包 / 宗門 / 世界BOSS / 煉丹 / 洞府 / 坊市 / 懸賞令 / 靈莊 / 秘境 / 煉體 / 傳承 / 飛升轉世，一應俱全。"
+    },
+    "service": {
+      "required": [
+        "database",
+        "monetary"
+      ],
+      "optional": [
+        "cron"
+      ]
+    },
+    "preview": false
+  },
+  "contributors": [
+    "wj6ej3ck6y3"
+  ],
+  "license": "MIT",
   "keywords": [
     "chatbot",
     "koishi",
@@ -22,19 +41,9 @@
     "rpg",
     "mmorpg"
   ],
-  "koishi": {
-    "description": {
-      "zh": "修仙模擬器：建號 / 修煉 / 突破 / 背包 / 宗門 / 世界BOSS / 煉丹 / 洞府 / 坊市 / 懸賞令 / 靈莊 / 秘境 / 煉體 / 傳承 / 飛升轉世，一應俱全。"
-    },
-    "service": {
-      "required": [
-        "database",
-        "monetary"
-      ],
-      "optional": [
-        "cron"
-      ]
-    }
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wj6ej3ck6y3/koishi-plugin-wj6y3-xiuxian"
   },
   "peerDependencies": {
     "koishi": "^4.17.0"
