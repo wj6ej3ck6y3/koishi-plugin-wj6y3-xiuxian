@@ -1,6 +1,6 @@
 {
   "name": "koishi-plugin-wj6y3-xiuxian",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "桐子的修仙遊戲插件：建號 / 修煉 / 突破 / 背包 / 宗門 / 世界BOSS / 煉丹 / 洞府 / 坊市 / 懸賞令 / 靈莊 / 秘境 / 煉體 / 傳承 / 飛升轉世，一應俱全。",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
