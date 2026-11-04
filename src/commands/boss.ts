@@ -8,6 +8,7 @@ import {
   recordBattle,
   CombatUnit,
   formatPct,
+  getItemNameById,   // ← 新增
 } from '../utils'
 
 // ======================= 世界 BOSS 数值配置 =======================
@@ -157,14 +158,25 @@ export function registerBossCommands(ctx: Context) {
           await addStone(ctx, pl.uid, WORLD_BOSS_CONFIG.KILL_STONE)
           rewards.push(`${pl.userName}（累计伤害 ${Math.floor(pt.damage)}）`)
         }
+
+        // ✅ 最后一击奖励：本次执行命令、且 battle winner === 'a' 即为击杀者
+        let lastHitLine = ''
         if (result.winner === 'a') {
           const dropRange = WORLD_BOSS_CONFIG.KILL_DROP_MAX - WORLD_BOSS_CONFIG.KILL_DROP_MIN + 1
           const dropCount = WORLD_BOSS_CONFIG.KILL_DROP_MIN + Math.floor(Math.random() * dropRange)
-          await addItem(ctx, p.userId, WORLD_BOSS_CONFIG.KILL_DROP_ID, dropCount)
+          const dropName = getItemNameById(WORLD_BOSS_CONFIG.KILL_DROP_ID)
+          try {
+            await addItem(ctx, p.userId, WORLD_BOSS_CONFIG.KILL_DROP_ID, dropCount)
+            lastHitLine = `\n🎯 最后一击：${me.name} 获得「${dropName}」×${dropCount}`
+          } catch (e: any) {
+            ctx.logger('xiuxian').warn(`最后一击奖励发放失败: ${e?.message ?? e}`)
+            lastHitLine = `\n⚠️ 最后一击奖励发放失败（物品 #${WORLD_BOSS_CONFIG.KILL_DROP_ID} ×${dropCount}）`
+          }
         }
+
         await ctx.database.remove(TABLE.boss, { id: boss.id })
         await ctx.database.remove(TABLE.bossP, { bossId: boss.id })
-        return `🎉 击杀 ${boss.name}！\n参战：${rewards.join('、')}\n每人 +${WORLD_BOSS_CONFIG.KILL_EXP} 修为 +${WORLD_BOSS_CONFIG.KILL_STONE} 灵石`
+        return `🎉 击杀 ${boss.name}！\n参战：${rewards.join('、')}\n每人 +${WORLD_BOSS_CONFIG.KILL_EXP} 修为 +${WORLD_BOSS_CONFIG.KILL_STONE} 灵石${lastHitLine}`
       }
       return `⚔️ 你对 ${boss.name} 造成 ${myDmg} 伤害，剩 ${bossUnit.hp}/${boss.maxHp}（${formatPct(bossUnit.hp, boss.maxHp)}%，你的累计：${oldDmg + myDmg}）`
     })

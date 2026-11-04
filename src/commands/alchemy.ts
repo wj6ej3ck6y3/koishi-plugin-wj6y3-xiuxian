@@ -27,28 +27,45 @@ export function registerAlchemyCommands(ctx: Context) {
       const items = await ctx.database.get(TABLE.back, { userId: p.userId })
       const have = new Map(items.map(it => [String(it.goodsId), it.goodsNum]))
       const list: CraftResult[] = []
+
       for (const [pid, pill] of Object.entries<any>(data.craftPills)) {
         if (!pill.craft) continue
         const { mainType, mainCount, auxType, auxCount } = pill.craft
-        // 遍历背包里符合类型的药材
+
+        // ✅ 主药 / 辅药分别按「类型 + 持有量」筛候选
+        const mainCandidates: string[] = []
+        const auxCandidates: string[] = []
         for (const [hid, num] of have) {
           const herb = data.herbs[hid]
           if (!herb) continue
-          const main = herb.main || []
-          const aux = herb.aux || []
-          if (main[0] !== mainType) continue
-          if (num < mainCount + auxCount) continue
-          if (aux[0] !== auxType) continue
-          list.push({
-            index: list.length + 1, pillId: pid, name: pill.name, mainId: hid, auxId: hid,
-          })
+          if (herb.main?.[0] === mainType && num >= mainCount) mainCandidates.push(hid)
+          if (herb.aux?.[0] === auxType && num >= auxCount) auxCandidates.push(hid)
         }
+
+        // ✅ 主药 ≠ 辅药：同一株药材不能同时兼任两者
+        let picked: { mainId: string; auxId: string } | null = null
+        for (const mid of mainCandidates) {
+          const aid = auxCandidates.find(a => a !== mid)
+          if (aid) { picked = { mainId: mid, auxId: aid }; break }
+        }
+        if (!picked) continue
+
+        // 每种丹方只列出一条可用组合，避免同一丹方占满列表
+        list.push({
+          index: list.length + 1, pillId: pid, name: pill.name,
+          mainId: picked.mainId, auxId: picked.auxId,
+        })
         if (list.length >= 20) break
       }
+
       recipeCache.set(p.userId, list)
       if (!list.length) return '背包中没有可炼制的丹方'
       return '⚗️ 可炼制丹方（发送「炼制 <序号>」）\n' +
-        list.slice(0, 20).map(r => `${r.index}. ${r.name}`).join('\n')
+        list.slice(0, 20).map(r => {
+          const mn = (data.herbs as any)[r.mainId]?.name ?? r.mainId
+          const an = (data.herbs as any)[r.auxId]?.name ?? r.auxId
+          return `${r.index}. ${r.name}（主药：${mn} / 辅药：${an}）`
+        }).join('\n')
     })
 
   ctx.command('炼制 <no:number>', '炼制')
@@ -58,43 +75,74 @@ export function registerAlchemyCommands(ctx: Context) {
       const list = recipeCache.get(p.userId) || []
       const r = list[no - 1]
       if (!r) return '序号不存在'
+
+      // ✅ 防御 1：旧 recipe（修复前缓存）中 mainId === auxId，必须拒绝
+      if (r.mainId === r.auxId) {
+        return '⚠️ 丹方数据异常（主辅药材冲突），请重新发送「炼丹」刷新后再试'
+      }
+
       const pill = data.craftPills[r.pillId]
+      if (!pill?.craft) return '丹方数据异常，请重新发送「炼丹」刷新'
       const herb = data.herbs[r.mainId]
       const aux = data.herbs[r.auxId]
+      if (!herb || !aux) return '药材数据异常，请重新发送「炼丹」刷新'
+
       const { mainCount, auxCount } = pill.craft
-      // 检查数量
+
+      // ✅ 防御 2：主药 / 辅药独立检查（mainId !== auxId 已在上面保证）
       const items = await ctx.database.get(TABLE.back, { userId: p.userId })
       const haveMain = items.find(i => String(i.goodsId) === r.mainId)?.goodsNum || 0
       const haveAux = items.find(i => String(i.goodsId) === r.auxId)?.goodsNum || 0
-      if (haveMain < mainCount || haveAux < auxCount) return '药材不足'
-      // 冷热调和
+      if (haveMain < mainCount) {
+        return `主药「${herb.name}」不足（需 ${mainCount}，持有 ${haveMain}）`
+      }
+      if (haveAux < auxCount) {
+        return `辅药「${aux.name}」不足（需 ${auxCount}，持有 ${haveAux}）`
+      }
+
+      // 冷热调和（暂沿用原逻辑：主药温度 + 主药自身药引温度）
+      // ⚠️ 数据侧 `aux` 只有 [类型, 数量]，无温度字段，故未将辅药纳入冷热判定
       if (herb.main?.[0] !== 0) {
-        // 简化：主药和药引的冷热和需为 0
         const guideSum = herb.main[0] + (herb.guide?.[0] ?? 0)
-        if (guideSum !== 0 && herb.main[0] !== 0) {
+        if (guideSum !== 0) {
           return '❌ 冷热失和，炼制失败（不消耗药材）'
         }
       }
-      // 计算成功率
+
+      // 成功率
       let rate = 60 + (pill.craft.successCap - 60) * 0.5
-      // ✅ 若装了炉子，加成 bonusSuccess
       const buff = await getBuff(ctx, p.userId)
       const furnace = buff.furnaceBuff ? data.furnaces[String(buff.furnaceBuff)] : undefined
       if (furnace?.bonusSuccess) rate += furnace.bonusSuccess * 100
       if (rate > 100) rate = 100
 
+      // ✅ 防御 3：统一扣料封装；用 { ok: boolean; reason?: string } 避开判别联合窄化问题
+      const consumeMaterials = async (): Promise<{ ok: boolean; reason?: string }> => {
+        const okMain = await removeItem(ctx, p.userId, Number(r.mainId), mainCount)
+        if (!okMain) {
+          return { ok: false, reason: `主药「${herb.name}」扣除失败（库存变动）` }
+        }
+        const okAux = await removeItem(ctx, p.userId, Number(r.auxId), auxCount)
+        if (!okAux) {
+          await addItem(ctx, p.userId, Number(r.mainId), mainCount)   // 回滚主药
+          return { ok: false, reason: `辅药「${aux.name}」扣除失败（库存变动）` }
+        }
+        return { ok: true }
+      }
+
+      // ===== 失败分支：失败也扣料，但扣料失败不吞材料 =====
       if (Math.random() * 100 > rate) {
-        // ✅ 失败也扣材料
-        await removeItem(ctx, p.userId, Number(r.mainId), mainCount)
-        await removeItem(ctx, p.userId, Number(r.auxId), auxCount)
+        const consumed = await consumeMaterials()
+        if (!consumed.ok) return `⚠️ 炼制中止：${consumed.reason ?? '未知错误'}`
         return `❌ 炼制失败！损失药材 ${mainCount} 主药 + ${auxCount} 辅药`
       }
 
-      // 成功扣材料 + 加丹药（数量受炉子 bonusQuantity 加成）
-      await removeItem(ctx, p.userId, Number(r.mainId), mainCount)
-      await removeItem(ctx, p.userId, Number(r.auxId), auxCount)
+      // ===== 成功分支：先扣料，再发丹 =====
+      const consumed = await consumeMaterials()
+      if (!consumed.ok) return `⚠️ 炼制中止：${consumed.reason ?? '未知错误'}`
+
       const qty = 1 + (furnace?.bonusQuantity ?? 0)
       await addItem(ctx, p.userId, Number(r.pillId), qty)
-      return `⚗️ 炼制成功！获得「${pill.name}」×${qty}`
+      return `⚗️ 炼制成功！获得「${pill.name}」×${qty}（主药：${herb.name} / 辅药：${aux.name}）`
     })
 }
