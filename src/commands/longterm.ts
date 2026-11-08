@@ -99,18 +99,26 @@ export function registerLongtermCommands(ctx: Context) {
       if (now < cd) return `CD 中，还需 ${formatRemainTime(cd - now)}`
       insightCd.set(p.userId, now + 60 * 60 * 1000)
 
-      // 50% 失败无事发生
-      if (Math.random() < 0.5) {
-        return '🌫️ 参悟天机，却未能有所收获……（本次无奖励）'
+      // 30% 失败无事发生
+      if (Math.random() < 0.3) {
+        return '🌫️ 参悟天机，却未能有所收获……'
       }
 
-      const gainExp = Math.floor(Math.random() * 1000) + 500
-      const gainRate = 1 + Math.floor(Math.random() * 3)
+      // 修为 = 当前突破所需修为的 0.1% ~ 1%
+      const needExp = getLevel(p.level)?.expToNext ?? 1000
+      const rate = 0.001 + Math.random() * 0.009
+      const gainExp = Math.max(1, Math.floor(needExp * rate))
+
+      // 顿悟成功时，仅 30% 概率获得突破率加成
+      const gainRate = Math.random() < 0.3 ? 1 + Math.floor(Math.random() * 3) : 0
+
       p.exp += gainExp
+      p.levelUpRate = (p.levelUpRate || 0) + gainRate
       await ctx.database.set(TABLE.player, { userId: p.userId }, {
-        exp: p.exp, levelUpRate: (p.levelUpRate || 0) + gainRate,
+        exp: p.exp, levelUpRate: p.levelUpRate,
       })
-      return `✨ 顿悟！修为 +${gainExp}，突破率累计 +${gainRate}%`
+
+      return `✨ 顿悟！修为 +${gainExp}${gainRate ? `，突破率累计 +${gainRate}%` : ''}`
     })
 
   // 飞升转世
@@ -242,7 +250,7 @@ export function registerLongtermCommands(ctx: Context) {
       p.exp += gain
       t[0].exp += gain
       let rateMsg = ''
-      if (Math.random() < 0.2) {
+      if (Math.random() < 0.1) {
         p.levelUpRate = (p.levelUpRate || 0) + 2
         t[0].levelUpRate = (t[0].levelUpRate || 0) + 2
         rateMsg = '，双方突破率 +2%'
