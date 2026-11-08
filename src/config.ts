@@ -25,15 +25,15 @@ export const Config: Schema<Config> = Schema.intersect([
   // ===== 公共部分（始终显示）=====
   Schema.object({
     // ---- 基础 ----
-    currency: Schema.string().default('灵石').required()
+    currency: Schema.string().default('灵石')
       .description('修仙货币名称（用于 monetary 服务的货币键名）。修改后新旧货币互不相通，请谨慎操作。'),
-    signMin: Schema.number().default(100000).min(0).required().description('签到灵石下限'),
-    signMax: Schema.number().default(500000).min(0).required().description('签到灵石上限'),
-    closeExpPerMinute: Schema.number().default(10).min(0).required().description('闭关每分钟基础修为'),
-    breakthroughFailLossRatio: Schema.number().default(0.3).min(0).required().description('突破失败扣除修为比例'),
-    breakthroughFailRateGain: Schema.number().default(5).min(0).max(100).required()
+    signMin: Schema.number().default(100000).min(0).description('签到灵石下限'),
+    signMax: Schema.number().default(500000).min(0).description('签到灵石上限'),
+    closeExpPerMinute: Schema.number().default(10).min(0).description('闭关每分钟基础修为'),
+    breakthroughFailLossRatio: Schema.number().default(0.3).min(0).description('突破失败扣除修为比例'),
+    breakthroughFailRateGain: Schema.number().default(5).min(0).max(100)
       .description('突破失败累积成功概率上限(%)，实际每次随机取 1 ~ 该值；设为 1 时固定 +1%'),
-    breakthroughCooldownMinutes: Schema.number().default(60).min(0).required()
+    breakthroughCooldownMinutes: Schema.number().default(60).min(0)
       .description('突破冷却分钟数（默认 60， 0 表示无冷却）'),
     rebirthMaxLevel: Schema.string().default('')
       .description('可飞升的最高境界ID(留空则自动取最大ID)'),
@@ -46,16 +46,16 @@ export const Config: Schema<Config> = Schema.intersect([
     bountyDropCategoryWeights: Schema.dict(Schema.number()).default({
       pill: 20, craftPill: 8, herb: 25, weapon: 12, armor: 8,
       gongfa: 10, shentong: 10, fuxiu: 3, qiFlag: 2, furnace: 2,
-    }).required().description('掉落类别权重'),
+    }).description('掉落类别权重'),
 
     // ---- 秘境 ----
-    riftDropChance: Schema.number().default(40).max(100).required()
+    riftDropChance: Schema.number().default(40).max(100)
       .description('秘境探索獲取灵石/修为時的额外物品掉落概率（%）'),
 
     // ---- 坊市----
-    shopAutoListing: Schema.boolean().default(true).required()
+    shopAutoListing: Schema.boolean().default(true)
       .description('是否启用坊市自动上架'),
-    shopExpireHours: Schema.number().default(72).min(0).required()
+    shopExpireHours: Schema.number().default(72).min(0)
       .description('坊市超时下架小时数'),
 
   }),
@@ -64,8 +64,8 @@ export const Config: Schema<Config> = Schema.intersect([
   Schema.union([
     // 启用：显示 shopMinItems / shopAutoPool
     Schema.object({
-      shopAutoListing: Schema.const(true).required(),
-      shopMinItems: Schema.number().default(10).min(0).required()
+      shopAutoListing: Schema.const(true),
+      shopMinItems: Schema.number().default(10).min(0)
         .description('坊市商品少于该值时自动上架'),
       shopAutoPool: Schema.array(Schema.number()).default([
         1101, 1102, 1103, 1104, 1105,
@@ -81,8 +81,6 @@ export const Config: Schema<Config> = Schema.intersect([
       ]).description('自动上架白名单物品 ID'),
     }),
     // 关闭：不显示 shopMinItems / shopAutoPool
-    Schema.object({
-      shopAutoListing: Schema.const(false).required(),
-    }),
+    Schema.object({}),
   ]),
 ]) as unknown as Schema<Config>
