@@ -35,7 +35,7 @@ export const Config: Schema<Config> = Schema.intersect([
       .description('突破失败累积成功概率上限(%)，实际每次随机取 1 ~ 该值；设为 1 时固定 +1%'),
     breakthroughCooldownMinutes: Schema.number().default(60).min(0).required()
       .description('突破冷却分钟数（默认 60， 0 表示无冷却）'),
-    rebirthMaxLevel: Schema.string().default('').required()
+    rebirthMaxLevel: Schema.string().default('')
       .description('可飞升的最高境界ID(留空则自动取最大ID)'),
 
     // ---- 悬赏令掉落----
