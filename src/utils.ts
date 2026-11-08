@@ -18,7 +18,6 @@ export async function getPlayer(ctx: Context, userId: string): Promise<Player | 
 export async function requirePlayer(ctx: Context, session: Session): Promise<Player> {
   const p = await getPlayer(ctx, session.userId!)
   if (!p) throw new Error('尚未踏入仙途，请先发送「我要修仙」')
-  // uid 懒修复
   if (p.uid === null) {
     let uid: number | null = (session as any).user?.id ?? null
     if (uid === null) {
@@ -45,24 +44,13 @@ export async function getBuff(ctx: Context, userId: string): Promise<BuffRow> {
   await ctx.database.create('wj6y3_xiuxian_buff', row)
   return row
 }
-/**
- * 截断（不四舍五入）到指定小数位数。
- * 用于防御力这类「只展示至小数点后 N 位，超出截断」的场景。
- *
- * @param value  原始值
- * @param digits 保留的小数位数（默认 2）
- */
+
 export function truncateDecimal(value: number, digits = 2): number {
   if (!Number.isFinite(value)) return 0
   const factor = Math.pow(10, digits)
   return Math.floor(value * factor) / factor
 }
 
-/**
- * 计算百分比（0~100 整数，向下取整）。
- * 用于气血、真元等「当前 / 上限」显示。
- * max 非法或 ≤ 0 时返回 0，避免除零 NaN。
- */
 export function formatPct(current: number, max: number): number {
   if (!max || !Number.isFinite(max) || max <= 0) return 0
   return Math.max(0, Math.min(100, Math.floor(current / max * 100)))
@@ -76,16 +64,11 @@ export interface LearnedSkills {
   shentong: number[]
 }
 
-/**
- * 读取玩家已学技能（并自动迁移旧 buff 字段）。
- * 迁移后清空 buff.mainBuff/subBuff/secBuff，避免重复迁移。
- */
 export async function getLearnedSkills(ctx: Context, userId: string): Promise<LearnedSkills> {
   const buff = await getBuff(ctx, userId)
   const existing = await ctx.database.get(TABLE.skill, { userId })
   const have = new Set(existing.map(r => r.skillId))
 
-  // 旧数据迁移
   const legacy: number[] = []
   if (buff.mainBuff && !have.has(buff.mainBuff)) legacy.push(buff.mainBuff)
   if (buff.subBuff && !have.has(buff.subBuff)) legacy.push(buff.subBuff)
@@ -161,7 +144,7 @@ export async function costStone(ctx: Context, uid: number | null, amount: number
 function sumModifiers(mods: Modifier[] | undefined, field: string): number {
   if (!mods) return 0
   return mods.filter(m => m.stat === field && (m.mode ?? 'pct') === 'pct')
-             .reduce((s, m) => s + m.value, 0)
+    .reduce((s, m) => s + m.value, 0)
 }
 
 export async function computeStats(ctx: Context, player: Player): Promise<ComputedStats> {
@@ -172,28 +155,23 @@ export async function computeStats(ctx: Context, player: Player): Promise<Comput
   const learned = await getLearnedSkills(ctx, player.userId)
   const modifiers: Modifier[] = []
 
-  // ✅ 已学主功法：全部累计
   for (const gid of learned.gongfa) {
     const g = getGongfa(gid)
     if (g?.modifiers) modifiers.push(...g.modifiers)
   }
 
-  // ✅ 已学辅修：按 effect 累计
   for (const fid of learned.fuxiu) {
     const sub = getFuXiu(fid)
     if (!sub) continue
     if (sub.effect === 'hpPct') modifiers.push({ stat: 'hp', value: sub.value / 100 })
     else if (sub.effect === 'damageBoost') modifiers.push({ stat: 'atk', value: sub.value / 100 })
-    // 其它 effect（lifesteal 等）在战斗内单独处理
   }
 
-  // 武器 / 防具
   const w = buff.faqiBuff ? getWeapon(buff.faqiBuff)?.modifiers : []
   if (w) modifiers.push(...w)
   const a = buff.armorBuff ? getArmor(buff.armorBuff)?.modifiers : []
   if (a) modifiers.push(...a)
 
-  // 炼体 + 共鸣
   const body = player.exercisesLevel ? getBodyLevel(player.exercisesLevel) : undefined
   if (body?.modifiers) modifiers.push(...(body.modifiers as Modifier[]))
 
@@ -228,7 +206,6 @@ export async function computeStats(ctx: Context, player: Player): Promise<Comput
   }
 }
 
-/** 单独计算已学功法的 cultivateSpeed 累计（用于闭关） */
 export async function computeCultivateSpeed(ctx: Context, userId: string): Promise<number> {
   const learned = await getLearnedSkills(ctx, userId)
   let total = 0
@@ -335,7 +312,6 @@ export async function addItem(ctx: Context, userId: string, goodsId: number, num
   }
 }
 
-/** 在玩家背包内按名字查找物品（按物品名字匹配玩家实际持有的 goodsId） */
 export async function findItemInBackpack(
   ctx: Context, userId: string, name: string,
 ): Promise<[string, any] | null> {
@@ -349,11 +325,6 @@ export async function findItemInBackpack(
   return null
 }
 
-/**
- * 从背包移除物品。
- * @param keepEmptyRow true 时数量归零但保留行（用于追踪 dayNum/allNum）；
- *                     false 时直接删除行。
- */
 export async function removeItem(
   ctx: Context,
   userId: string,
@@ -386,10 +357,6 @@ export interface PlayerBattleReady {
   unit: CombatUnit
 }
 
-/**
- * 统一战斗前置：读玩家 → 检查气血 → 计算属性 → 构造战斗单位。
- * 气血枯竭时返回 string（直接作为命令回复），正常时返回对象。
- */
 export async function preparePlayerBattle(
   ctx: Context,
   session: Session,
@@ -398,7 +365,6 @@ export async function preparePlayerBattle(
   if (!Number.isFinite(player.hp)) {
     return '⚠️ 气血数据异常，请联系管理员'
   }
-  // 重伤阈值：至少 1% 上限气血才能出战
   const threshold = Math.max(1, Math.floor(player.maxhp * 0.01))
   if (player.hp < threshold) {
     return `你身受重伤，请服丹或出关疗伤后再战`
@@ -416,25 +382,15 @@ export interface CombatUnit {
   mp: number; maxmp: number
   atk: number; def: number; spd: number
   crit: number; critDmg: number; pen: number
-  /** 已学神通 ID 列表（学习制） */
   shenTongIds?: number[]
-  /** 吸血%（来自辅修） */
   lifesteal?: number
-  /** 临时 buff 状态（type 3 神通施加） */
   tempAtkMul?: number
   tempDefMul?: number
   tempBuffRemain?: number
-  /**
-   * 持续伤害列表：每回合按 source 当前状态重算（暴击/浮动/半防/保底 1）
-   */
   dotList?: Array<{
-    /** 每回合伤害倍率（源攻击 × multiplier） */
     multiplier: number
-    /** 剩余回合 */
     remainTurns: number
-    /** 显示用的名字 */
     sourceName: string
-    /** 施加者的活引用，用于取 atk / crit / critDmg / tempAtkMul / pen */
     source: CombatUnit
   }>
   userId?: string
@@ -450,8 +406,6 @@ export async function buildPlayerUnit(ctx: Context, p: Player, st: ComputedStats
     if (sub?.effect === 'lifesteal') lifesteal += sub.value / 100
   }
 
-  // 隐患 1：用 ?? 而非 ||，避免 0 血被 fallback 成满血
-  // 隐患 2：hp/mp 钳制到 [1, maxhp]，保证不会倒挂、也不会 0 血卡死
   const rawHp = p.hp ?? st.hp
   const rawMp = p.mp ?? st.mp
 
@@ -469,50 +423,26 @@ export async function buildPlayerUnit(ctx: Context, p: Player, st: ComputedStats
   }
 }
 
-/**
- * 统一伤害计算管道（普攻 / 神通每段 / DoT 每回合 全部走这里）
- *
- * @param attacker   攻击方
- * @param defender   防守方
- * @param multiplier 伤害倍率（普攻 = 1；神通 = atkValue；DoT = 记录的 multiplier）
- * @param defFactor  防御系数（普攻 1；神通 / DoT 均 0.5）
- *
- * 计算顺序：
- *   1 攻击 × 增益倍率 × 伤害倍率
- *   2 暴击判定（触发则 × critDmg）
- *   3 伤害浮动 ×[0.9, 1.1]
- *   4 计算有效防御（含防守方减伤、穿透、防御系数）
- *   5 扣防 → 保底 1
- *
- * ⚠️ 全流程仅在最后一步保底 1，中间不做 max(1, …) 截断。
- */
 export function calcOneHit(
   attacker: CombatUnit,
   defender: CombatUnit,
   multiplier: number,
   defFactor: number,
 ): { dmg: number; crit: boolean } {
-  // 1 攻击 × 增益倍率 × 伤害倍率
   let raw = attacker.atk * (attacker.tempAtkMul ?? 1) * multiplier
 
-  // 2 暴击
   const crit = Math.random() < attacker.crit
   if (crit) raw *= attacker.critDmg
 
-  // 3 伤害浮动 ±10%
   raw *= (0.9 + Math.random() * 0.2)
 
-  // 4 减伤%（穿透可部分无视减伤）
-  //    def 已是百分比（0~95），defFactor 仅影响「神通/普攻是否用全量减伤」
   const defReduce = (defender.def / 100) * defFactor * (1 - attacker.pen)
   const appliedDefReduce = Math.min(0.95, Math.max(0, defReduce))
 
-  // 5 乘算减伤 → 保底 1
   const dmg = Math.max(1, Math.floor(raw * (1 - appliedDefReduce)))
   return { dmg, crit }
 }
 
-/** 普攻在神通池中的权重 */
 const BASIC_ATTACK_WEIGHT = 200
 
 function pickAction(
@@ -524,10 +454,9 @@ function pickAction(
   ]
   if (unit.shenTongIds && unit.shenTongIds.length > 0) {
     for (const id of unit.shenTongIds) {
-      if ((cdMap.get(id) ?? 0) > 0) continue     // 冷却中跳过
+      if ((cdMap.get(id) ?? 0) > 0) continue
       const st = getShenTong(id)
       if (!st) continue
-      // mp 不够也过滤掉，避免选中后释放失败浪费回合
       if (unit.mp < st.mpCost * unit.maxmp) continue
       pool.push({ kind: 'shentong', id, weight: getShenTongWeight(id) })
     }
@@ -552,7 +481,6 @@ export function simulateBattle(a: CombatUnit, b: CombatUnit, maxRound = 30): {
     if (att.hp <= 0 || def.hp <= 0) return false
     const action = pickAction(att, cdMap)
 
-    // ===== 普攻 =====
     if (action.kind === 'basic') {
       const { dmg, crit } = calcOneHit(att, def, 1, 1)
       def.hp = Math.max(0, def.hp - dmg)
@@ -564,18 +492,16 @@ export function simulateBattle(a: CombatUnit, b: CombatUnit, maxRound = 30): {
       return def.hp <= 0
     }
 
-    // ===== 神通 =====
     const st = getShenTong(action.id)
     if (!st) return false
     att.mp -= Math.floor(st.mpCost * att.maxmp)
-    cdMap.set(action.id, st.turnCost)   // turnCost = 冷却/持续回合数
+    cdMap.set(action.id, st.turnCost)
 
     if (Math.random() * 100 >= st.rate) {
       log.push({ round, text: `${att.name} 施展「${st.name}」但未命中` })
       return false
     }
 
-    // ===== type 3：增减益（无伤害，持续 = 冷却 = turnCost）=====
     if (st.type === 3) {
       if (st.buffType === 1) {
         att.tempAtkMul = (att.tempAtkMul ?? 1) * (1 + (st.buffValue ?? 0))
@@ -589,11 +515,9 @@ export function simulateBattle(a: CombatUnit, b: CombatUnit, maxRound = 30): {
       return false
     }
 
-    // ===== type 2：持续伤害（首击即时 + DoT turnCost-1 回合，全部走统一管道）=====
     if (st.type === 2) {
       const mul = Number(st.atkValue) || 0
 
-      // 首击即时结算（暴击 / 浮动 / 半防 / 保底 1）
       const first = calcOneHit(att, def, mul, 0.5)
       def.hp = Math.max(0, def.hp - first.dmg)
       log.push({
@@ -624,7 +548,6 @@ export function simulateBattle(a: CombatUnit, b: CombatUnit, maxRound = 30): {
       return def.hp <= 0
     }
 
-    // ===== type 1 / type 4：多段伤害，每段独立结算（暴击 / 浮动 / 半防 / 保底 1）=====
     const values = Array.isArray(st.atkValue) ? st.atkValue : [st.atkValue]
     let totalDmg = 0
     let anyCrit = false
@@ -649,7 +572,6 @@ export function simulateBattle(a: CombatUnit, b: CombatUnit, maxRound = 30): {
     return def.hp <= 0
   }
 
-  // ===== 主循环：每回合双方轮流出手 =====
   for (let r = 1; r <= maxRound; r++) {
     const order: Array<[CombatUnit, CombatUnit, 'a' | 'b', Map<number, number>]> = a.spd >= b.spd
       ? [[a, b, 'a', cdA], [b, a, 'b', cdB]]
@@ -658,11 +580,9 @@ export function simulateBattle(a: CombatUnit, b: CombatUnit, maxRound = 30): {
       if (doTurn(att, def, cd, r)) return { winner: side, log }
     }
 
-    // ===== 回合末：CD -1 =====
     for (const [id, v] of cdA) if (v > 0) cdA.set(id, v - 1)
     for (const [id, v] of cdB) if (v > 0) cdB.set(id, v - 1)
 
-    // ===== 回合末：buff 计时 -1、DoT 结算（每回合独立重算）=====
     for (const u of [a, b]) {
       if (u.tempBuffRemain && u.tempBuffRemain > 0) {
         u.tempBuffRemain -= 1
@@ -670,7 +590,6 @@ export function simulateBattle(a: CombatUnit, b: CombatUnit, maxRound = 30): {
       }
       if (u.dotList && u.dotList.length > 0) {
         for (const dot of u.dotList) {
-          // DoT 走统一管道：暴击 / 浮动 / 半防 / 保底 1，源攻击取施加者实时状态
           const { dmg, crit } = calcOneHit(dot.source, u, dot.multiplier, 0.5)
           u.hp = Math.max(0, u.hp - dmg)
           log.push({
@@ -692,45 +611,33 @@ export function simulateBattle(a: CombatUnit, b: CombatUnit, maxRound = 30): {
 // ======================= 战斗记录内存暂存 =======================
 
 export interface BattleRecord {
-  /** 记录写入时间戳 */
   ts: number
-  /** 战斗标题（如「讨伐世界 BOSS「远古魔龙」」） */
   title: string
-  /** 战斗日志 */
   log: BattleLogEntry[]
-  /** 战斗结果（'a' 为玩家方胜，'b' 为对手胜，'draw' 平局） */
   winner: 'a' | 'b' | 'draw'
-  /** 玩家单位名称 */
   playerName: string
-  /** 对手单位名称 */
   opponentName: string
 }
 
-/** 记录战斗的可选参数 */
 export interface BattleRecordOptions {
-  /** 对手 userId。传了则双方都记录 */
   opponentUserId?: string
-  /** 对手视角的标题（不传则与主角相同） */
   opponentTitle?: string
 }
 
-const BATTLE_RECORD_TTL = 120_000   // 120 秒
+const BATTLE_RECORD_TTL = 120_000
 const _battleRecords = new Map<string, BattleRecord>()
 
-/** 写入战斗记录（默认只写主角；传 opponentUserId 则双方都写） */
 export function recordBattle(
   userId: string,
   record: BattleRecord,
   options?: BattleRecordOptions,
 ): void {
-  // ===== 主角视角 =====
   _battleRecords.set(userId, record)
   setTimeout(() => {
     const cur = _battleRecords.get(userId)
     if (cur && cur.ts === record.ts) _battleRecords.delete(userId)
   }, BATTLE_RECORD_TTL)
 
-  // ===== 对手视角（可选）=====
   const oppId = options?.opponentUserId
   if (!oppId) return
   const flipped: BattleRecord = {
@@ -748,7 +655,6 @@ export function recordBattle(
   }, BATTLE_RECORD_TTL)
 }
 
-/** 读取战斗记录（过期返回 null） */
 export function getBattleRecord(userId: string): BattleRecord | null {
   const rec = _battleRecords.get(userId)
   if (!rec) return null
@@ -759,36 +665,37 @@ export function getBattleRecord(userId: string): BattleRecord | null {
   return rec
 }
 
-/** 战斗记录 TTL（供命令显示剩余秒数） */
 export function getBattleRecordTtl(): number {
   return BATTLE_RECORD_TTL
 }
 
 // ======================= 每日重置 =======================
 
-export async function resetDaily(ctx: Context) {
-  const all = await ctx.database.get('wj6y3_xiuxian_player', {})
-  for (const p of all) {
-    await ctx.database.set('wj6y3_xiuxian_player', { userId: p.userId }, {
-      riftDailyCount: 0, workRefreshCount: 0, dualCultivation: 0,
-    })
-  }
+/**
+ * 每日重置（B10：已移除多余项）
+ *
+ * 说明：`riftDailyCount` / `workRefreshCount` / `dualCultivation` 三项
+ * 完全依赖命令内的 toDateString() 日切判断自动清零（且还需要
+ * `riftCd` / `workRefreshCountTime` / `dualCultivationTime` 保持原状，
+ * 让 toDateString() 比较有效）。定时任务整批清空反而会破坏时间戳语义。
+ *
+ * 保留此函数作为未来可能新增「必须整批清空」的字段挂载点。
+ */
+export async function resetDaily(_ctx: Context) {
+  // 目前无需整批重置的字段
 }
 
 // ======================= 单次限定突破丹 =======================
 
-/** 判断是否为单次限定突破丹（breakthroughBigRate 类） */
 export function isOneShotBreakthroughPill(pill: any): boolean {
   return pill?.modifiers?.some((m: any) => m.stat === 'breakthroughBigRate')
 }
 
-/** 取该丹的突破率加成值（%），非单次丹返回 0 */
 export function getOneShotBreakthroughValue(pill: any): number {
   const bt = pill?.modifiers?.find((m: any) => m.stat === 'breakthroughBigRate')
   return bt?.value ?? 0
 }
 
-/** 查询玩家已服用的某颗单次丹（是否整局已用） */
 export async function isOneShotPillUsed(
   ctx: Context, userId: string, pillId: number,
 ): Promise<boolean> {
@@ -796,7 +703,6 @@ export async function isOneShotPillUsed(
   return rows.length > 0
 }
 
-/** 突破时计算本次目标境界可用的单次丹加成 */
 export async function computeOneShotBreakthroughBonus(
   ctx: Context, userId: string, currentLevel: string,
 ): Promise<{ bonus: number; pillIds: number[] }> {
@@ -817,17 +723,12 @@ export async function computeOneShotBreakthroughBonus(
 
 // ======================= 聚灵旗 =======================
 
-/** 每级聚灵旗对修为的加成（0.1 = +10%），想改数值直接改这里 */
 const QI_CULTIVATE_PER_LEVEL = 0.1
-/** 每级聚灵旗对灵田时间的加速（0.2 意味 5 级 2 倍速），想改数值直接改这里 */
 const QI_HERB_PER_LEVEL = 0.2
 
 export interface QiFlagBonus {
-  /** 修为倍率（≥1，越大越好） */
   cultivateMul: number
-  /** 灵田时间倍率（≤1，越小越快） */
   herbTimeMul: number
-  /** 当前旗名称（若未装备则空串） */
   name: string
 }
 
@@ -844,7 +745,6 @@ type CategoryPool = Record<string, DropEntry[]>
 
 let _dropPoolCache: CategoryPool | null = null
 
-/** 构建全物品池（按类别分组），首次调用后缓存 */
 export function buildDropPool(): CategoryPool {
   if (_dropPoolCache) return _dropPoolCache
   const pool: CategoryPool = {
@@ -875,7 +775,6 @@ export function buildDropPool(): CategoryPool {
   return pool
 }
 
-/** 按权重抽类别 */
 function pickCategory(weights: Record<string, number>, pool: CategoryPool): string | null {
   const entries = Object.entries(weights).filter(([k, w]) => w > 0 && (pool[k]?.length ?? 0) > 0)
   if (entries.length === 0) return null
@@ -888,7 +787,6 @@ function pickCategory(weights: Record<string, number>, pool: CategoryPool): stri
   return entries[0][0]
 }
 
-/** 在类别内按物品 weight 抽 */
 function pickItemInCategory(category: string, pool: CategoryPool): DropEntry | null {
   const items = pool[category] ?? []
   if (items.length === 0) return null
@@ -901,7 +799,6 @@ function pickItemInCategory(category: string, pool: CategoryPool): DropEntry | n
   return items[items.length - 1]
 }
 
-/** 从全局权重池抽 1 件物品（供悬赏令生成列表时调用） */
 export function rollSingleDrop(categoryWeights: Record<string, number>): DropEntry | null {
   const pool = buildDropPool()
   const cat = pickCategory(categoryWeights, pool)
@@ -921,7 +818,6 @@ export async function getQiFlagBonus(ctx: Context, userId: string): Promise<QiFl
 
 // ======================= 通用：物品 ID → 名称 =======================
 
-/** 从全部物品表中按 ID 查名称，找不到返回 "#id" */
 export function getItemNameById(goodsId: number | string): string {
   const id = String(goodsId)
   const sources: Array<Record<string, any>> = [
@@ -939,29 +835,21 @@ export function getItemNameById(goodsId: number | string): string {
 
 // ======================= 属性字段名中文映射 =======================
 
-/**
- * 属性字段名 → 中文
- * 未来新增 stat 只需在此加一行；未收录的字段自动回退显示原 key
- */
 const STAT_LABEL_MAP: Record<string, string> = {
-  // 基础属性
   hp: '气血',
   mp: '真元',
   atk: '攻击',
   def: '防御',
   spd: '速度',
-  // 战斗属性
   crit: '会心',
   critDmg: '暴伤',
   pen: '穿透',
-  // 修炼 / 突破
   cultivateSpeed: '修炼速度',
   exp: '修为',
   breakthroughRate: '突破率',
   breakthroughBigRate: '大境界突破率',
 }
 
-/** 属性字段名转中文，未收录时返回原字段名 */
 export function statLabel(stat: string): string {
   return STAT_LABEL_MAP[stat] ?? stat
 }
@@ -970,14 +858,6 @@ export function statLabel(stat: string): string {
 
 import type { Tables } from 'koishi'
 
-/**
- * 手动分配下一个自增 ID（从 1 开始，0 保留为无效值）。
- * 用于规避部分数据库 adapter 将 AUTO_INCREMENT 从 0 开始或未正确建表的问题。
- * 
- * @param ctx 上下文
- * @param table 表名（必须存在于 Tables 中）
- * @param idField 主键字段名
- */
 export async function getNextId<K extends keyof Tables>(
   ctx: Context,
   table: K,
@@ -990,7 +870,6 @@ export async function getNextId<K extends keyof Tables>(
 
 // ======================= 通用：物品品阶反查 =======================
 
-/** weight → 品阶名称 缓存 */
 let _tierMapCache: Map<number, string> | null = null
 
 function getTierMap(): Map<number, string> {
@@ -1003,29 +882,18 @@ function getTierMap(): Map<number, string> {
   return m
 }
 
-/**
- * 按物品 ID 反查品阶名称（如：人阶下品）
- * 
- * 规则：
- * - 药材：返回 "N 阶药材"（tier 1~9）
- * - 丹药 / 炼丹丹药 / 聚灵旗 / 炼丹炉：无品阶概念，返回空串
- * - 功法 / 辅修 / 武器 / 防具 / 神通：通过 weight 反查品阶概率表
- */
 export function getQualityLabel(goodsId: number | string): string {
   const id = String(goodsId)
 
-  // 1. 药材：tier 1~9 显示为 "N 阶药材"
   const herb = data.herbs[id]
   if (herb && typeof herb.tier === 'number') {
     return `${herb.tier} 阶药材`
   }
 
-  // 2. 无品阶物品：直接返回空
   if (data.pills[id] || data.craftPills[id] || data.qiFlags[id] || data.furnaces[id]) {
     return ''
   }
 
-  // 3. 有 weight 的物品：按品阶概率表反查
   const qualityTables: Array<Record<string, any>> = [
     data.gongfa, data.fuxiu, data.weapons, data.armors, data.shentong,
   ]
@@ -1040,11 +908,6 @@ export function getQualityLabel(goodsId: number | string): string {
   return ''
 }
 
-/**
- * 把剩余毫秒格式化为人类可读的单单位字符串。
- * 单位选择：≥1 小时 → 小时；≥1 分钟 → 分钟；否则 → 秒。
- * 向上取整，保证显示时间 ≥ 真实剩余量。
- */
 export function formatRemainTime(remainMs: number): string {
   const remainSec = Math.max(0, remainMs) / 1000
   if (remainSec >= 3600) return `${Math.ceil(remainSec / 3600)} 小时`
@@ -1057,19 +920,13 @@ export function formatRemainTime(remainMs: number): string {
 
 // ======================= 通用：物品估价 =======================
 
-/**
- * 估算物品价格。
- * - 普通丹药优先使用 JSON 官方定价（price.buy）
- * - 其它物品按权重反推：BASE_PRICE / weight（权重越高越常见越便宜）
- * - 保底 100 灵石
- */
 export function estimatePrice(goodsId: number | string): number {
   const id = String(goodsId)
 
   const pill = data.pills[id]
   if (pill?.price?.buy) return pill.price.buy
 
-  let weight = 50 // 默认权重
+  let weight = 50
   if (data.craftPills[id]) weight = data.craftPills[id].weight
   else if (data.herbs[id]) weight = data.herbs[id].weight
   else if (data.weapons[id]) weight = data.weapons[id].weight
@@ -1083,4 +940,21 @@ export function estimatePrice(goodsId: number | string): number {
   const BASE_PRICE = 1_000_000
   const safeWeight = Math.max(1, weight)
   return Math.max(100, Math.floor(BASE_PRICE / safeWeight))
+}
+
+/**
+ * 从 Koishi 的 WriteResult 中提取「受影响行数」。
+ *
+ * 不同数据库 adapter 的 WriteResult 字段不完全一致：
+ *   - MySQL / SQLite：`{ matched, modified }`
+ *   - PostgreSQL：`{ modified }`
+ *   - 部分 adapter：`{ deleted }` / `{ inserted }`
+ *
+ * 只要任一字段存在即返回该数值；全都缺失时返回 `-1`，
+ * 调用方应在 `-1` 时按「乐观成功」处理（即不因无法判断而误拦）。
+ */
+export function getAffectedRows(res: any): number {
+  if (!res || typeof res !== 'object') return -1
+  const v = res.modified ?? res.matched ?? res.deleted ?? res.inserted
+  return typeof v === 'number' ? v : -1
 }

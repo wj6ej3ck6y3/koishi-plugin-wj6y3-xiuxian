@@ -37,6 +37,8 @@ export interface Player {
   rebirth: number
   dualCultivation: number
   dualCultivationTime: Date
+  /** 参悟天机 CD 时间戳（B8：由内存 Map 迁移到落库） */
+  insightCd: Date
 }
 
 export interface CdRow {
@@ -146,18 +148,19 @@ export interface ShopRow {
 export interface PillUsedRow {
   userId: string
   pillId: number
-  targetLevelId: string   // 服用时对应的目标突破境界
+  targetLevelId: string
   usedAt: Date
 }
 
 export interface BountyListRow {
   userId: string
-  slot: number          // 1/2/3
-  questKey: string      // "采药:寻找玉髓芝"
-  dropJson: string      // JSON.stringify([{id, name, num}])
+  slot: number
+  questKey: string
+  dropJson: string
   successRate: number
   createdAt: Date
 }
+
 // ================= 关键：扩展 Koishi 全局 Tables =================
 
 declare module 'koishi' {
@@ -239,6 +242,7 @@ export function defineModels(ctx: Context) {
     rebirth: 'integer',
     dualCultivation: 'integer',
     dualCultivationTime: 'timestamp',
+    insightCd: 'timestamp',
   }, { primary: ['userId'] })
 
   ctx.model.extend('wj6y3_xiuxian_cd', {
@@ -259,7 +263,7 @@ export function defineModels(ctx: Context) {
     sectUsedStone: 'double',
     offeringSnapshot: 'double',
     offeringSnapshotAt: 'timestamp',
-  }, { primary: ['sectId']})
+  }, { primary: ['sectId'] })
 
   ctx.model.extend('wj6y3_xiuxian_back', {
     userId: 'string',
@@ -362,7 +366,6 @@ export function defineModels(ctx: Context) {
   }, { primary: ['userId', 'slot'] })
 }
 
-// monetary 表接口
 export interface MonetaryRow {
   uid: number
   currency: string

@@ -6,6 +6,7 @@ import {
   requirePlayer, costStone, refreshPlayerStats,
   getPlayer, getStone,
   formatRemainTime,
+  getAffectedRows,
 } from '../utils'
 
 export function registerLongtermCommands(ctx: Context) {
@@ -27,9 +28,8 @@ export function registerLongtermCommands(ctx: Context) {
       if (p.uid === null) return '灵石服务未同步'
 
       const lv1 = getLevel('1')!
-      const [rootId, root] = rollRoot()   // rebirth 归 0 → 正常随机
+      const [rootId, root] = rollRoot()
 
-      // 1. 重置 player（只保留 sectId / sectPosition / userName）
       await ctx.database.set(TABLE.player, { userId: p.userId }, {
         level: '1', exp: 0, rebirth: 0,
         levelUpRate: 0, levelUpCd: new Date(0),
@@ -43,12 +43,12 @@ export function registerLongtermCommands(ctx: Context) {
         sectContribution: 0,
         sectMissionId: 0, sectMissionDoneAt: new Date(0),
         sectOfferingGet: new Date(0),
-        blessedSpotFlag: 0, blessedSpotName: '', plotCount: 0,   // 洞府清空
+        blessedSpotFlag: 0, blessedSpotName: '', plotCount: 0,
         root: rootId,
-        isSign: new Date(0),                                      // 允许当天重签
+        isSign: new Date(0),
+        insightCd: new Date(0),
       })
 
-      // 2. 清空所有关联表
       await ctx.database.remove(TABLE.skill, { userId: p.userId })
       await ctx.database.remove(TABLE.buff, { userId: p.userId })
       await ctx.database.remove(TABLE.pillUsed, { userId: p.userId })
@@ -60,11 +60,9 @@ export function registerLongtermCommands(ctx: Context) {
       await ctx.database.remove(TABLE.work, { userId: p.userId })
       await ctx.database.remove(TABLE.bountyList, { userId: p.userId })
 
-      // 3. 持有灵石清零
       const curStone = await getStone(ctx, p.uid)
       if (curStone > 0) await costStone(ctx, p.uid, curStone)
 
-      // 4. 重新计算属性
       const updated = await getPlayer(ctx, p.userId)
       if (updated) await refreshPlayerStats(ctx, updated)
 
@@ -89,27 +87,41 @@ export function registerLongtermCommands(ctx: Context) {
       return `🗿 攻击修炼提升至 ${p.atkPractice + 1} 重（+${(p.atkPractice + 1) * 4}% 攻击）`
     })
 
-  // 参悟天机（顿悟）
-  const insightCd = new Map<string, number>()
+  // ===== 参悟天机（B8：内存 CD → 落库 insightCd + 原子占位） =====
   ctx.command('参悟天机', '随机顿悟').alias('顿悟')
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
       const now = Date.now()
-      const cd = insightCd.get(p.userId) || 0
-      if (now < cd) return `CD 中，还需 ${formatRemainTime(cd - now)}`
-      insightCd.set(p.userId, now + 60 * 60 * 1000)
+
+      // 老数据懒迁移：insightCd 为空时补 new Date(0)
+      if (!p.insightCd) {
+        await ctx.database.set(TABLE.player, { userId: p.userId }, { insightCd: new Date(0) })
+        p.insightCd = new Date(0)
+      }
+
+      const oldCd = +new Date(p.insightCd)
+      if (now < oldCd) return `CD 中，还需 ${formatRemainTime(oldCd - now)}`
+
+      // ✅ 原子占位：只有旧 insightCd 仍是本次读到的值时才成功，防并发双触发
+      const newCd = new Date(now + 60 * 60 * 1000)
+      const writeRes: any = await ctx.database.set(TABLE.player, {
+        userId: p.userId,
+        insightCd: new Date(oldCd),
+      }, { insightCd: newCd })
+
+      const affected = getAffectedRows(writeRes)
+      // ✅ 只有明确「修改 0 行」才判定被并发抢走；-1（adapter 不提供行数）按乐观处理
+      if (affected === 0) return 'CD 中，请稍后再试'
 
       // 30% 失败无事发生
       if (Math.random() < 0.3) {
         return '🌫️ 参悟天机，却未能有所收获……'
       }
 
-      // 修为 = 当前突破所需修为的 0.1% ~ 1%
       const needExp = getLevel(p.level)?.expToNext ?? 1000
       const rate = 0.001 + Math.random() * 0.009
       const gainExp = Math.max(1, Math.floor(needExp * rate))
 
-      // 顿悟成功时，仅 30% 概率获得突破率加成
       const gainRate = Math.random() < 0.3 ? 1 + Math.floor(Math.random() * 3) : 0
 
       p.exp += gainExp
@@ -140,10 +152,8 @@ export function registerLongtermCommands(ctx: Context) {
       const newRebirth = (p.rebirth || 0) + 1
       const lv1 = getLevel('1')!
 
-      // 灵根重抽：排除前 newRebirth 个低阶灵根
       const [rootId, root] = rollRootExcluding(newRebirth)
 
-      // 1. 重置 player 表（保留 sectId / sectPosition / blessedSpotFlag / blessedSpotName / plotCount / userName / isSign）
       await ctx.database.set(TABLE.player, { userId: p.userId }, {
         level: '1', exp: 0, rebirth: newRebirth,
         levelUpRate: 0, levelUpCd: new Date(0),
@@ -160,44 +170,33 @@ export function registerLongtermCommands(ctx: Context) {
         root: rootId,
       })
 
-      // 2. 清空已学技能（功法 / 辅修 / 神通）
       await ctx.database.remove(TABLE.skill, { userId: p.userId })
 
-      // 3. 清空 buff 装备槽与攻击加成，保留 blessedSpot（灵气等级，洞府保留）
       await ctx.database.set(TABLE.buff, { userId: p.userId }, {
         mainBuff: 0, secBuff: 0, subBuff: 0,
         faqiBuff: 0, armorBuff: 0, atkBuff: 0,
         furnaceBuff: 0, qiFlagBuff: 0,
-        // blessedSpot 保留
       } as any)
 
-      // 4. 清空单次突破丹使用记录
       await ctx.database.remove(TABLE.pillUsed, { userId: p.userId })
-
-      // 5. 背包重置
       await ctx.database.remove(TABLE.back, { userId: p.userId })
 
-      // 6. 灵庄清空（灵石重置的一部分——否则玩家飞升前存灵庄逃过清零）
       const [bankRow] = await ctx.database.get(TABLE.bank, { userId: p.userId })
       if (bankRow) {
         await ctx.database.set(TABLE.bank, { userId: p.userId }, {
           saveStone: 0,
           saveTime: new Date(),
-          // bankLevel 保留
         })
       }
 
-      // 7. 持有灵石清零
       const curStone = await getStone(ctx, p.uid)
       if (curStone > 0) await costStone(ctx, p.uid, curStone)
 
-      // 8. 清空进行中活动
       await ctx.database.remove(TABLE.cd, { userId: p.userId })
       await ctx.database.remove(TABLE.quest, { userId: p.userId })
       await ctx.database.remove(TABLE.work, { userId: p.userId })
       await ctx.database.remove(TABLE.bountyList, { userId: p.userId })
 
-      // 9. 重新计算属性
       const updated = await getPlayer(ctx, p.userId)
       if (updated) await refreshPlayerStats(ctx, updated)
 
@@ -223,13 +222,11 @@ export function registerLongtermCommands(ctx: Context) {
       const p = await requirePlayer(ctx, session)
       const target = (session as any).elements?.find((e: any) => e.type === 'at')?.attrs?.id
       if (!target) return '请 @ 道侣'
-      // ✅ 修复 6-1：不能与自己双修
       if (target === p.userId) return '不能与自己双修'
 
       const t = await ctx.database.get(TABLE.player, { userId: target })
       if (!t[0]) return '对方尚未入仙途'
 
-      // ✅ 新增：发起方境界数 < 接受方境界 − 3 → 拒绝
       const myLvNum = parseInt(p.level, 10) || 1
       const targetLvNum = parseInt(t[0].level, 10) || 1
       if (myLvNum < targetLvNum - 3) {
@@ -242,8 +239,6 @@ export function registerLongtermCommands(ctx: Context) {
       if (last.toDateString() !== dayKey) cnt = 0
       if (cnt >= 3) return '今日双修次数已用尽'
 
-      // ✅ 修为收益 = (发起方修为 + 接受方修为) / 2 × [0.75, 1.25]
-      //   先取 base 再改 exp，避免被 += 影响
       const baseExp = (p.exp + t[0].exp) / 200
       const gain = Math.floor(baseExp * (0.75 + Math.random() * 0.5))
 

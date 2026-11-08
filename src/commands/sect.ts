@@ -17,10 +17,9 @@ import {
 const POSITION_NAMES = ['散修', '宗主', '长老', '亲传弟子', '内门弟子', '外门弟子']
 
 // ======================= 宗门任务数值配置 =======================
-// 星级对应的：属性倍率 + 奖励。改这里即可调优宗门任务难度，无需翻 handler。
 const SECT_MISSION_CONFIG = {
   STARS: {
-    1: { hpMul: 0.7, atkMul: 0.7, defMul: 0.7, rewardStone: 500,  rewardContrib: 50, rewardBuild: 50 },
+    1: { hpMul: 0.7, atkMul: 0.7, defMul: 0.7, rewardStone: 500, rewardContrib: 50, rewardBuild: 50 },
     2: { hpMul: 0.9, atkMul: 0.9, defMul: 0.9, rewardStone: 1000, rewardContrib: 50, rewardBuild: 100 },
     3: { hpMul: 1.1, atkMul: 1.1, defMul: 1.1, rewardStone: 1500, rewardContrib: 50, rewardBuild: 150 },
     4: { hpMul: 1.4, atkMul: 1.4, defMul: 1.4, rewardStone: 2000, rewardContrib: 50, rewardBuild: 200 },
@@ -31,33 +30,24 @@ const SECT_MISSION_CONFIG = {
   }>,
   STAR_NAMES: ['', '一星', '二星', '三星', '四星', '五星'],
 
-  // 妖兽基础属性倍率（相对于境界基础）
   BASE_HP_MULT: 0.5,
   BASE_ATK_MULT: 0.4,
-  MAX_DEF_CAP: 85,          // 减伤% 上限（数值防御模式下请改 Infinity）
+  MAX_DEF_CAP: 85,
   SPD: 0,
-  // 暴击属性
   CRIT: 0.05,
   CRIT_DMG: 1.5,
 
-  // 星级解锁：达到以下境界才可接更高星
-  UNLOCK_REALM_FOR_4STAR: 11,   // 元婴以上可接 4 星
-  UNLOCK_REALM_FOR_5STAR: 17,   // 炼虚以上可接 5 星
+  UNLOCK_REALM_FOR_4STAR: 11,
+  UNLOCK_REALM_FOR_5STAR: 17,
 
-  // 任务完成后冷却（小时）
   COOLDOWN_HOURS: 12,
 }
 
-/**
- * 依玩家当前境界与任务星级，构建宗门妖兽战斗单位。
- * 每次调用都用最新配置，改表后立即生效。
- */
 export function buildSectMissionBoss(levelId: string, star: number): CombatUnit {
   const cfg = SECT_MISSION_CONFIG.STARS[star] ?? SECT_MISSION_CONFIG.STARS[1]
   const lv = data.levels[levelId] ?? data.levels['1']
   const starName = SECT_MISSION_CONFIG.STAR_NAMES[star] || `${star}星`
   const hp = Math.floor(lv.hp * SECT_MISSION_CONFIG.BASE_HP_MULT * cfg.hpMul)
-  // ✅ 宗门妖兽防御仅受难度（星级）加成，不再乘基础倍率
   const def = Math.min(SECT_MISSION_CONFIG.MAX_DEF_CAP, lv.def * cfg.defMul)
   return {
     name: `宗门妖兽（${starName}）`,
@@ -72,23 +62,6 @@ export function buildSectMissionBoss(levelId: string, star: number): CombatUnit 
   }
 }
 
-/**
- * 结算「宗门建设度 → 灵石」的每日转换（幂等）。
- *
- * 规则（与旧内联逻辑保持一致）：
- *   - 判定：offeringSnapshotAt 不是今天（toDateString 比较）
- *   - buildBonus  = floor(sectScale / 10000)
- *   - sectUsedStone  += buildBonus
- *   - offeringSnapshot = floor(sectUsedStone * 0.001)
- *   - offeringSnapshotAt = 今天
- *
- * 调用方：
- *   - 插件 ready 时（补一次跨天结算）
- *   - 每分钟 tick（内部幂等，进程在 0 点那一分钟挂起也能在下一 tick 补齐）
- *   - 供奉命令（幂等兜底，保证玩家领取前数据已最新）
- *
- * @param onlySectId 限定结算单个宗门；不传则结算全部宗门
- */
 export async function settleSectDaily(ctx: Context, onlySectId?: number): Promise<void> {
   const now = new Date()
   const today = now.toDateString()
@@ -166,7 +139,6 @@ export function registerSectCommands(ctx: Context) {
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
       if (!p.sectId) return '你尚未加入任何宗门'
-      // ✅ 兜底：确保今日宗门结算已完成（幂等，跨天补齐）
       await settleSectDaily(ctx, p.sectId)
       const [sect] = await ctx.database.get(TABLE.sect, { sectId: p.sectId })
       if (!sect) return '宗门不存在（数据异常）'
@@ -212,7 +184,6 @@ export function registerSectCommands(ctx: Context) {
       const actualSpend = Math.floor(amount / 10) * 10
       if (actualSpend < 10) return '至少捐献 10 灵石'
 
-      // ✅ 兜底：先结算（幂等）。保证今日已锁定的 snapshot 不含本次捐献
       await settleSectDaily(ctx, p.sectId)
 
       if (!(await costStone(ctx, p.uid, actualSpend))) return '灵石不足'
@@ -250,12 +221,10 @@ export function registerSectCommands(ctx: Context) {
       if (!p.sectId) return '未加入宗门'
       if (p.sectPosition <= 0) return '你没有宗门职位，无法管理人员'
 
-      // ✅ 直接使用实际职位编号，且不能设置为宗主(1)，范围只能是 2-5
       if (pos < 2 || pos > 5) {
         return '职位值需在 2-5 之间（2长老 / 3亲传 / 4内门 / 5外门）'
       }
 
-      // ✅ 不能把人提升到与自己同级或比自己高
       if (pos <= p.sectPosition) {
         return '你不能将其他成员的职位设置得与自己同级或更高'
       }
@@ -267,7 +236,6 @@ export function registerSectCommands(ctx: Context) {
       const rows = await ctx.database.get(TABLE.player, { userId: target })
       if (!rows[0] || rows[0].sectId !== p.sectId) return '该成员不在你的宗门'
 
-      // ✅ 只能管理下级：目标当前职位必须比自己低（数值更大），不能动同级或上级（防篡改宗主）
       if (rows[0].sectPosition <= p.sectPosition) {
         return '你不能变更同级或更高级别成员的职位'
       }
@@ -311,7 +279,11 @@ export function registerSectCommands(ctx: Context) {
       const p = await requirePlayer(ctx, session)
       if (!p.sectId) return '未加入宗门'
       if (p.sectPosition === 1) return '宗主需先传位或解散宗门（暂不支持解散）'
-      await ctx.database.set(TABLE.player, { userId: p.userId }, { sectId: 0, sectPosition: 0 })
+
+      // ✅ B5：退出时清空进行中的宗门任务（不清 sectMissionDoneAt，保留 CD 语义）
+      await ctx.database.set(TABLE.player, { userId: p.userId }, {
+        sectId: 0, sectPosition: 0, sectMissionId: 0,
+      })
       return '✅ 已退出宗门'
     })
 
@@ -327,8 +299,6 @@ export function registerSectCommands(ctx: Context) {
       const last = new Date(p.sectOfferingGet)
       if (last.toDateString() === now.toDateString()) return '今日已领取供奉'
 
-      // 幂等兜底：定时任务可能尚未跑到（例如进程刚重启 / 挂起恢复），
-      // 先按当前宗门补一次「建设度 → 灵石」结算，再读取最新数据。
       await settleSectDaily(ctx, p.sectId)
 
       const [sect] = await ctx.database.get(TABLE.sect, { sectId: p.sectId })
@@ -401,21 +371,19 @@ export function registerSectCommands(ctx: Context) {
           return `批量兑换 ${actualCount} 颗回复丹需 ${need} 贡献（当前 ${Math.floor(p.sectContribution)}）`
         }
 
-        // ✅ 动态构建回复丹池（modifiers 含 hp / mp），并携带 weight
         const allHealPills = Object.entries(data.pills as Record<string, any>)
           .filter(([, v]) => (v?.modifiers ?? []).some((m: any) => m.stat === 'hp' || m.stat === 'mp'))
 
         const lvNum = parseInt(p.level, 10) || 1
         const buildPool = (src: [string, any][]) => src.map(([id, v]) => ({
           id: Number(id),
-          weight: Math.max(1, Number(v.weight) || 1),   // weight 越高越常见，与品阶设计一致
+          weight: Math.max(1, Number(v.weight) || 1),
         }))
 
         let pool = buildPool(allHealPills.filter(([, v]) => !v.realm || lvNum >= Number(v.realm)))
-        if (pool.length === 0) pool = buildPool(allHealPills)   // 回退：全池
+        if (pool.length === 0) pool = buildPool(allHealPills)
         if (pool.length === 0) return '暂无可兑换的回复丹药'
 
-        // ✅ 按 weight 加权抽 1 颗
         const pickWeighted = () => {
           const total = pool.reduce((s, it) => s + it.weight, 0)
           let r = Math.random() * total
@@ -460,7 +428,6 @@ export function registerSectCommands(ctx: Context) {
         return `冷却中，还需 ${formatRemainTime(remainMs)}`
       }
 
-      // ✅ 境界限制星级上限（阈值从配置读取）
       const lvNum = parseInt(p.level, 10)
       let maxStar = 3
       if (lvNum >= SECT_MISSION_CONFIG.UNLOCK_REALM_FOR_4STAR) maxStar = 4
@@ -485,7 +452,6 @@ export function registerSectCommands(ctx: Context) {
       }
       if (!p.sectMissionId) return '当前无任务'
 
-      // ✅ 用配置函数生成妖兽（数值改动只需改 SECT_MISSION_CONFIG）
       const star = p.sectMissionId
       const cfg = SECT_MISSION_CONFIG.STARS[star] ?? SECT_MISSION_CONFIG.STARS[1]
       const boss = buildSectMissionBoss(p.level, star)
@@ -508,7 +474,6 @@ export function registerSectCommands(ctx: Context) {
         p.hp = me.hp
         p.mp = me.mp
 
-        // ✅ 兜底：先结算，保证今日已锁定的 snapshot 不含本次建设度增量
         await settleSectDaily(ctx, p.sectId)
 
         await ctx.database.set(TABLE.player, { userId: p.userId }, {

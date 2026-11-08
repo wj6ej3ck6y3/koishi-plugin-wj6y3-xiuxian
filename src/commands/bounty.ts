@@ -5,6 +5,7 @@ import {
   requirePlayer, addStone, costStone, addItem,
   rollSingleDrop, DropEntry,
   formatRemainTime,
+  getAffectedRows,
 } from '../utils'
 
 const BOUNTY_SIZE = 3
@@ -57,7 +58,6 @@ function rollSuccessRate(): number {
   const values: number[] = []
   for (let sr = 25; sr <= 100; sr += 5) values.push(sr)
 
-  // 三角分布：峰值在 75
   const weights = values.map(sr => Math.max(1, 100 - Math.abs(sr - 75)))
   const total = weights.reduce((s, w) => s + w, 0)
 
@@ -69,22 +69,18 @@ function rollSuccessRate(): number {
   return 75
 }
 
-// ===== 成功率加成：100% → ×1.0，25% → ×3.0，线性插值 =====
 function successBonus(sr: number): number {
   return 1 + ((100 - sr) / 75) * 2
 }
 
-// ===== 修为奖励 = 基础修为 × 境界编号 × 成功率加成 =====
 function calcExpReward(baseExp: number, level: number, sr: number): number {
   return Math.floor(baseExp * level * successBonus(sr))
 }
 
-// ===== 灵石奖励 = 加成后修为奖励 × 5 =====
 function calcStoneReward(baseExp: number, level: number, sr: number): number {
   return calcExpReward(baseExp, level, sr) * 5
 }
 
-// ===== 按 weight（JSON 里的 rate 字段）加权抽 N 个不重复任务 =====
 function pickTasksByWeight(
   pool: Array<{ key: string; cat: string; name: string; task: any }>,
   count: number,
@@ -105,7 +101,6 @@ function pickTasksByWeight(
   return picked
 }
 
-// ===== 生成一批 3 个 =====
 async function generateBountyList(ctx: Context, userId: string) {
   await ctx.database.remove(TABLE.bountyList, { userId })
   const all = buildAllTasks()
@@ -159,20 +154,19 @@ async function clearSession(ctx: Context, userId: string) {
 // ===== 结算结果类型 =====
 interface BountySettleResult {
   settled: boolean
-  /** 成功结算的展示消息；或 error 分支的异常提示 */
   msg?: string
-  /** 未结算原因 */
   reason?: 'no-active' | 'not-ready' | 'error'
-  /** reason = 'not-ready' 时的剩余毫秒数 */
   remainMs?: number
 }
 
 /**
  * 尝试结算进行中的悬赏令。
- * - 有进行中且已到期 → 结算、发奖、清 cd/quest、生成新批次，返回 settled: true + msg
- * - 有进行中但未到期 → settled: false, reason: 'not-ready', remainMin
- * - 没有进行中 → settled: false, reason: 'no-active'
- * - 数据异常 → 清理 cd/quest，返回 settled: false, reason: 'error', msg
+ *
+ * ✅ B2：并发保护策略
+ *   - 确认到期后，立即用 `database.remove(TABLE.cd, { userId, type: 2 })` 抢占
+ *   - 删除成功（>0 行）的请求才继续结算发奖
+ *   - 其他请求读到 remainMs=1000 稍后重试
+ *   - 后续分支只清 quest/work（cd 已在抢占步骤删除），避免误删并发接取的新 cd
  */
 async function trySettleBounty(
   ctx: Context,
@@ -188,23 +182,36 @@ async function trySettleBounty(
     return { settled: false, reason: 'not-ready', remainMs }
   }
 
+  // ✅ B2：抢占式删除（只有真正删除成功的那次请求才能继续）
+  const lockRes: any = await ctx.database.remove(TABLE.cd, { userId: p.userId, type: 2 })
+  const locked = getAffectedRows(lockRes)
+  // ✅ 只有明确「删除 0 行」才判定被抢；-1（adapter 不提供行数）按乐观处理
+  if (locked === 0) {
+    return { settled: false, reason: 'not-ready', remainMs: 1000 }
+  }
+
+  const cleanQuestAndWork = async () => {
+    await ctx.database.remove(TABLE.quest, { userId: p.userId })
+    await ctx.database.remove(TABLE.work, { userId: p.userId })
+  }
+
   const qRows = await ctx.database.get(TABLE.quest, { userId: p.userId })
   const slot = qRows[0]?.questId
   if (!slot) {
-    await clearSession(ctx, p.userId)
+    await cleanQuestAndWork()
     return { settled: false, reason: 'error', msg: '任务数据异常' }
   }
 
   const listRows = await ctx.database.get(TABLE.bountyList, { userId: p.userId, slot })
   if (!listRows[0]) {
-    await clearSession(ctx, p.userId)
+    await cleanQuestAndWork()
     return { settled: false, reason: 'error', msg: '任务列表数据异常，请重新发送「悬赏令」' }
   }
   const [cat, ...rest] = listRows[0].questKey.split(':')
   const name = rest.join(':')
   const task = (data.bounty as any)[cat]?.[name]
   if (!task) {
-    await clearSession(ctx, p.userId)
+    await cleanQuestAndWork()
     return { settled: false, reason: 'error', msg: '任务编号无效' }
   }
 
@@ -238,7 +245,7 @@ async function trySettleBounty(
     msg = `❌ 「${name}」失败，仍获得修为 +${expGain}`
   }
 
-  await clearSession(ctx, p.userId)
+  await cleanQuestAndWork()
   await generateBountyList(ctx, p.userId)
   return { settled: true, msg }
 }
@@ -261,11 +268,9 @@ export function registerBountyCommands(ctx: Context) {
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
 
-      // 先尝试自动结算已到期的进行中悬赏（默认给修为）
       const settleResult = await trySettleBounty(ctx, p)
       const prefix = settleResult.msg ? settleResult.msg + '\n\n' : ''
 
-      // 结算后再读 cd，判断是否还有进行中的（未到期）悬赏
       const cdRows = await ctx.database.get(TABLE.cd, { userId: p.userId })
 
       if (cdRows[0]?.type === 2) {
@@ -304,7 +309,6 @@ export function registerBountyCommands(ctx: Context) {
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
 
-      // 先尝试自动结算已到期的进行中悬赏
       const settleResult = await trySettleBounty(ctx, p)
       if (settleResult.settled) {
         const list = await loadBountyList(ctx, p.userId)
@@ -313,7 +317,6 @@ export function registerBountyCommands(ctx: Context) {
           formatBountyList(list, parseInt(p.level, 10) || 1)
       }
 
-      // 未触发结算：原有刷新逻辑
       const cdRows = await ctx.database.get(TABLE.cd, { userId: p.userId })
       if (cdRows[0]?.type === 2) return '正在进行悬赏令，无法刷新'
       if (cdRows[0]?.type === 1) return '正在闭关中，无法刷新'

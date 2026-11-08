@@ -13,7 +13,7 @@ import { registerAlchemyCommands } from './commands/alchemy'
 import { registerBodyCommands } from './commands/body'
 import { registerSpotCommands } from './commands/spot'
 import { registerShopCommands } from './commands/shop'
-import { registerGambleCommands } from './commands/gamble'
+import { registerGambleCommands, cleanupGambleCds } from './commands/gamble'
 import { registerLongtermCommands } from './commands/longterm'
 import { registerAdminCommands } from './commands/admin'
 import { getPlayer, resetDaily, getItemNameById, getNextId, addItem, estimatePrice } from './utils'
@@ -54,12 +54,10 @@ export function apply(ctx: Context, config: Config) {
   registerLongtermCommands(ctx)
   registerAdminCommands(ctx)
 
-  // 定时任务：优先 cron，未启用则回退 setInterval
   setupTimers(ctx, config)
 
   // ======================= 未建号玩家拦截（混合方案） =======================
 
-  // 正向名单：这些命令要求玩家已建号
   const XIUXIAN_GAME_COMMANDS = new Set([
     // ===== 基础（base.ts）=====
     '修仙签到',
@@ -99,7 +97,7 @@ export function apply(ctx: Context, config: Config) {
     '宗门职位变更',
     '踢出宗门',
     '宗主传位',
-    '宗门每日供奉', '宗门供奉', '领取宗门俸禄','宗门俸禄',
+    '宗门每日供奉', '宗门供奉', '领取宗门俸禄', '宗门俸禄',
     '宗门贡献兑换', '贡献兑换',
     '接取宗门任务', '宗门任务接取',
     '完成宗门任务', '宗门任务完成',
@@ -158,8 +156,6 @@ export function apply(ctx: Context, config: Config) {
     '抢灵石',
   ])
 
-  // 反向白名单：永远放行，不论是否建号
-  // 目前只有建号命令需要放行，其余未收录命令（含管理指令）默认放行
   const NEVER_BLOCK = new Set(['我要修仙'])
 
   ctx.before('command/execute', async (argv: any) => {
@@ -168,11 +164,9 @@ export function apply(ctx: Context, config: Config) {
     if (!session?.userId || !cmdName) return
 
     const required = COMMAND_AUTHORITY[cmdName]
-    if (required === undefined) return   // 该命令不需要额外权限
+    if (required === undefined) return
 
-    // 优先 session.authority（装了 @koishijs/plugin-auth 时自动注入）
     let auth: number = (session as any).authority ?? 0
-    // 没有则从数据库读一次
     if (auth === 0) {
       try {
         const user = await ctx.database.getUser(session.platform as any, session.userId)
@@ -187,26 +181,19 @@ export function apply(ctx: Context, config: Config) {
     const cmdNameRaw: string = argv?.command?.name ?? ''
     if (!session?.userId || !cmdNameRaw) return
 
-    // 取命令名最后一段，防止嵌套命令 name 变成 'xiuxian/xxx'
     const cmdName = cmdNameRaw.split('/').pop() || cmdNameRaw
 
-    // 1. 永远放行的命令（建号）
     if (NEVER_BLOCK.has(cmdName)) return
-
-    // 2. 不在"需要登录"名单里 → 不处理（管理命令 / 其它插件命令）
     if (!XIUXIAN_GAME_COMMANDS.has(cmdName)) return
 
-    // 3. 查玩家，已建号放行
     const p = await getPlayer(ctx, session.userId)
     if (p) return
 
-    // 4. 未建号 → 返回提示，命令 action 不会执行
     return '⚠️ 你尚未踏入仙途，请先发送「我要修仙」加入仙途。'
   })
 
   ctx.on('ready', async () => {
     ctx.logger('xiuxian').info('修仙插件已加载')
-    // 加载时补一次跨天结算（幂等）
     try {
       await settleSectDaily(ctx)
     } catch (e: any) {
@@ -216,24 +203,6 @@ export function apply(ctx: Context, config: Config) {
 }
 
 // ======================= 定时任务注册 =======================
-/**
- * 优先使用 cron 服务（@koishijs/plugin-cron）注册标准 cron 表达式；
- * 若 cron 服务不可用，则自动回退到原有的 setInterval 逻辑。
- *
- * 两种模式通过 `cronBound` 互斥，绝不重复执行。
- *
- * cron 表达式：
- *   - `0 0 * * *` 每天 0 点：每日重置 + 宗门每日结算
- *   - `0 * * * *` 每小时整点：坊市清理过期 / 自动上架
- *
- * 宗门结算若因 0:00 定时任务漏跑而未执行，会由「我的宗门」「宗门捐献」
- * 「宗门每日供奉」「完成宗门任务」等指令的兜底调用补齐。
- *
- * 日志级别：
- *   - info  ：一次性「启用 cron」或「回退 setInterval」的模式报告
- *   - debug ：每次任务触发 / 完成（想观察需将日志级别调整到 debug）
- *   - warn  ：任务执行异常
- */
 function setupTimers(ctx: Context, config: Config) {
   const logger = ctx.logger('xiuxian')
 
@@ -246,6 +215,14 @@ function setupTimers(ctx: Context, config: Config) {
       logger.debug(`[定时任务] 完成：坊市每小时任务（耗时 ${Date.now() - t0}ms）`)
     } catch (e: any) {
       logger.warn(`[定时任务] 坊市每小时任务失败: ${e?.message ?? e}`)
+    }
+
+    // ✅ B9：清理过期的内存 CD
+    try {
+      cleanupGambleCds()
+      logger.debug('[定时任务] 完成：内存 CD 清理')
+    } catch (e: any) {
+      logger.warn(`[定时任务] 内存 CD 清理失败: ${e?.message ?? e}`)
     }
   }
 
@@ -270,11 +247,6 @@ function setupTimers(ctx: Context, config: Config) {
   // ========== cron 绑定（this 保留 + 时机延后） ==========
   let cronBound = false
 
-  /**
-   * 尝试把两个 cron 任务绑定到 scope。
-   * - 关键 1：用 `scope.cron(...)` 直接调用，**不要提取方法引用**，否则 `this` 丢失
-   * - 关键 2：只在 scope 完全就绪后调用（inject 回调 / ready 事件）
-   */
   const bindCron = (scope: Context): boolean => {
     if (cronBound) return true
     const s = scope as any
@@ -297,13 +269,10 @@ function setupTimers(ctx: Context, config: Config) {
     }
   }
 
-  // 触发点 A：cron 服务就绪时（inject 回调在 scope 完全建立后才执行）
   ctx.inject(['cron'], (scope) => {
     bindCron(scope)
   })
 
-  // 触发点 B：插件 ready 时再兜一次（覆盖 cron 已存在但 inject 未触发的场景）
-  //           ready 后 cron 的 collect 链路一定就绪
   ctx.on('ready', () => {
     bindCron(ctx)
   })
@@ -324,7 +293,6 @@ function setupTimers(ctx: Context, config: Config) {
     }
   }, 60_000)
 
-  // ========== 5 秒后报告最终生效模式（只在未绑定 cron 时） ==========
   ctx.setTimeout(() => {
     if (!cronBound) {
       logger.info('未检测到 cron 服务，定时任务已回退到 setInterval 模式（每日 0:00 检查 / 每小时一次）')
@@ -336,12 +304,10 @@ async function runHourlyShopJob(ctx: Context, config: Config) {
   const now = Date.now()
   const expireMs = (config.shopExpireHours ?? 72) * 3600 * 1000
 
-  // 1. 清理过期商品
   const all = await ctx.database.get(TABLE.shop, {})
   let expired = 0
   for (const s of all) {
     if (now - +new Date(s.createTime) >= expireMs) {
-      // 退回卖家背包（系统卖家 '0' 直接删）
       if (s.sellerId !== '0') {
         await addItem(ctx, s.sellerId, s.goodsId, s.goodsNum)
       }
@@ -351,21 +317,18 @@ async function runHourlyShopJob(ctx: Context, config: Config) {
   }
   if (expired > 0) ctx.logger('xiuxian').info(`坊市清理过期商品 ${expired} 件`)
 
-  // 2. 判断是否自动上架
   if (!config.shopAutoListing) return
   const remain = await ctx.database.get(TABLE.shop, {})
   if (remain.length >= config.shopMinItems) return
 
-  // 从白名单随机挑一件
   const pool = config.shopAutoPool ?? []
   if (pool.length === 0) return
   const goodsId = pool[Math.floor(Math.random() * pool.length)]
   const price = estimatePrice(goodsId)
 
-  // ✅ 手动分配 ID
   const id = await getNextId(ctx, TABLE.shop, 'id')
   await ctx.database.create(TABLE.shop, {
-    id, // ✅ 传入
+    id,
     sellerId: '0', sellerName: '系统', goodsId,
     price, goodsNum: 1, createTime: new Date(),
   })

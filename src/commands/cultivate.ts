@@ -27,7 +27,7 @@ export function registerCultivateCommands(ctx: Context) {
       return '🧘 你已进入闭关状态，发送「出关」结算修为。'
     })
 
-  // ---------- 出关（回复 + 上限） ----------
+  // ---------- 出关 ----------
   ctx.command('出关', '结束闭关结算修为')
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
@@ -77,7 +77,6 @@ export function registerCultivateCommands(ctx: Context) {
   ctx.command('灵石修炼 <count:number>', '用灵石直接换修为').alias('灵石修仙')
     .action(async ({ session }, count) => {
       if (!count || count <= 0) return '请输入大于 0 的灵石数量'
-      // 向下取整到 10 的倍数
       const actualSpend = Math.floor(count / 10) * 10
       if (actualSpend < 10) return '至少需要 10 灵石才能修炼'
       const p = await requirePlayer(ctx, session)
@@ -102,12 +101,10 @@ export function registerCultivateCommands(ctx: Context) {
         `突破概率：${finalRate}% ${info.big ? ' 大境界突破' : ''}`,
       ]
       lines.push(`修为：${Math.floor(p.exp)} / ${info.expRequired}`)
-      // 推荐丹药（仅提示）
       if (info.requirePill.length) {
         const names = info.requirePill.map(id => (data.pills[id] ?? data.craftPills[id])?.name ?? id)
         lines.push(`推荐丹药：${names.join('、')}（服用可提升突破率）`)
       }
-      // 背包可用突破丹
       const back = await ctx.database.get(TABLE.back, { userId: p.userId })
       const usable: string[] = []
       for (const it of back) {
@@ -118,7 +115,6 @@ export function registerCultivateCommands(ctx: Context) {
       }
       if (usable.length) lines.push(`持有突破丹：${usable.join('、')}（发送「使用 丹药名」服用）`)
 
-      // 渡厄丹提示
       const hasDue = back.find(it => it.goodsId === 1999 && it.goodsNum > 0)
       if (hasDue) lines.push(`💊 持有渡厄丹 ×${hasDue.goodsNum}，可用「渡厄突破」避免修为跌落`)
       const cdMinutes = Math.max(0, (ctx as any).config?.breakthroughCooldownMinutes ?? 60)
@@ -175,7 +171,7 @@ async function doBreakthrough(ctx: Context, session: any, useDue: boolean) {
     dueProtect = true
   }
 
-  // ✅ 单次限定突破丹加成（从独立表读，不写 levelUpRate）
+  // 单次限定突破丹加成（从独立表读，不写 levelUpRate）
   const oneShot = await computeOneShotBreakthroughBonus(ctx, p.userId, p.level)
   const finalRate = Math.min(100, info.rate + oneShot.bonus)
 
@@ -187,7 +183,7 @@ async function doBreakthrough(ctx: Context, session: any, useDue: boolean) {
 
   if (success) {
     p.level = info.nextLevelId
-    p.levelUpRate = 0     // 通用临时加乘清零
+    p.levelUpRate = 0
     await ctx.database.set(TABLE.player, { userId: p.userId }, {
       level: p.level, exp: p.exp, levelUpRate: 0, levelUpCd: cdStamp,
     })
@@ -195,14 +191,19 @@ async function doBreakthrough(ctx: Context, session: any, useDue: boolean) {
     return `✨ 突破成功！晋升「${getLevel(p.level)?.name}」！${oneShotNote}${dueNote}`
   }
 
-  // ✅ 新代码
+  // 失败：扣修为 + 加累计概率
   const maxGain = Math.max(1, Math.floor((ctx as any).config.breakthroughFailRateGain))
-  const rateGain = 1 + Math.floor(Math.random() * maxGain)   // 1 ~ maxGain（含两端）
+  const rateGain = 1 + Math.floor(Math.random() * maxGain)
   const loss = dueProtect ? 0 : Math.floor(info.expRequired * ((ctx as any).config?.breakthroughFailLossRatio ?? 0.3))
   p.exp = Math.max(0, p.exp - loss)
   p.levelUpRate = (p.levelUpRate || 0) + rateGain
 
-  // ✅ 失败后重新计算总突破率（基础 + 新累计 + 单次丹）
+  // ✅ B3：失败也写入 levelUpCd，避免零间隔反复刷突破
+  await ctx.database.set(TABLE.player, { userId: p.userId }, {
+    exp: p.exp, levelUpRate: p.levelUpRate, levelUpCd: cdStamp,
+  })
+
+  // 失败后重新计算总突破率（基础 + 新累计 + 单次丹）
   const newInfo = checkBreakthrough(p)
   const newTotalRate = Math.min(100, newInfo.rate + oneShot.bonus)
 

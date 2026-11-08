@@ -10,6 +10,7 @@ import {
   getBattleRecord,
   truncateDecimal,
   formatPct,
+  getAffectedRows,
 } from '../utils'
 
 export function registerBaseCommands(ctx: Context) {
@@ -19,8 +20,6 @@ export function registerBaseCommands(ctx: Context) {
       const userId = session.userId!
       const exist = await getPlayer(ctx, userId)
       if (exist) return '你已入仙途，无需重复。发送「我的修仙信息」查看。'
-      // 优先用 session.user.id（Koishi 内部主键），它是 monetary 用的 id
-      // 兜底走 database.getUser（首次会话时可能 user 还没同步）
       let uid: number | null = (session as any).user?.id ?? null
       if (uid === null) {
         const user = await ctx.database.getUser(session.platform as any, userId)
@@ -36,10 +35,10 @@ export function registerBaseCommands(ctx: Context) {
       const player: Player = {
         userId,
         platform: session.platform,
-        uid,                              // ✅ 不再 ?? 0
+        uid,
         root: rootId,
         level: initialLevel,
-        exercisesLevel: '20001',          // ✅ 3.2：开局筋骨境一层
+        exercisesLevel: '20001',
         power: lv.power,
         isSign: new Date(0),
         exp: 0,
@@ -57,6 +56,7 @@ export function registerBaseCommands(ctx: Context) {
         riftCd: new Date(0), riftDailyCount: 0,
         workRefreshCountTime: 0, workRefreshCount: 0,
         rebirth: 0, dualCultivation: 0, dualCultivationTime: new Date(0),
+        insightCd: new Date(0),
       }
       await ctx.database.create('wj6y3_xiuxian_player', player)
 
@@ -69,7 +69,7 @@ export function registerBaseCommands(ctx: Context) {
       ].join('\n')
     })
 
-  // ---------- 签到 ----------
+  // ---------- 签到（B6：条件更新做原子占位） ----------
   ctx.command('修仙签到', '每日签到领取灵石')
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
@@ -82,11 +82,20 @@ export function registerBaseCommands(ctx: Context) {
       const max = (ctx as any).config?.signMax ?? 2000
       const gain = Math.floor(min + Math.random() * (max - min + 1))
 
-      // ✅ 先读余额，再发放，显示时用 before + gain
+      // ✅ 原子性：只有 isSign 仍是「今日 0 点之前」时才更新成功
+      const todayStart = new Date(now)
+      todayStart.setHours(0, 0, 0, 0)
+      const writeRes: any = await ctx.database.set(TABLE.player, {
+        userId: p.userId,
+        isSign: { $lt: todayStart },
+      }, { isSign: now })
+
+      const affected = getAffectedRows(writeRes)
+      // ✅ 只有明确「修改 0 行」才拒绝；-1（adapter 不提供行数）按乐观处理
+      if (affected === 0) return '今日已签到，明日再来。'
+
       const before = await getStone(ctx, p.uid)
       await addStone(ctx, p.uid, gain)
-      await ctx.database.set(TABLE.player, { userId: p.userId }, { isSign: now })
-
       return `📅 签到成功，获得灵石 ×${gain}，当前灵石 ${before + gain}。`
     })
 
@@ -102,7 +111,6 @@ export function registerBaseCommands(ctx: Context) {
       const buff = await getBuff(ctx, p.userId)
       const learned = await getLearnedSkills(ctx, p.userId)
 
-      // ===== 主功法 + 辅修累计加成 =====
       const gongfaStatSums: Record<string, number> = {}
       for (const gid of learned.gongfa) {
         const g = data.gongfa[String(gid)]
@@ -122,25 +130,23 @@ export function registerBaseCommands(ctx: Context) {
         }
       }
 
-      // ===== 突破率三段拆解 =====
       const info = checkBreakthrough(p)
       const oneShot = await computeOneShotBreakthroughBonus(ctx, p.userId, p.level)
       const tempRate = p.levelUpRate || 0
-      const baseRate = Math.max(0, info.rate - tempRate)  // info.rate 已含 tempRate
+      const baseRate = Math.max(0, info.rate - tempRate)
       const dueRate = oneShot.bonus
       const totalRate = Math.min(100, baseRate + tempRate + dueRate)
 
-      // ===== 装备槽 =====
       const equipItems: Array<{
         icon: string; label: string; id: number; table: any;
         desc?: (m: any) => string
       }> = [
           {
             icon: '⚔️', label: '武器', id: buff.faqiBuff, table: data.weapons,
-          desc: (m) => {
-            const mods = (m.modifiers ?? []).map((x: any) => `${statLabel(x.stat)} +${(x.value * 100).toFixed(0)}%`).join('、')
-            return mods ? `（${mods}）` : ''
-          },
+            desc: (m) => {
+              const mods = (m.modifiers ?? []).map((x: any) => `${statLabel(x.stat)} +${(x.value * 100).toFixed(0)}%`).join('、')
+              return mods ? `（${mods}）` : ''
+            },
           },
           {
             icon: '🛡️', label: '防具', id: buff.armorBuff, table: data.armors,
@@ -168,7 +174,6 @@ export function registerBaseCommands(ctx: Context) {
       lines.push(`灵石：${stone}`)
       lines.push('')
 
-      // 状态
       lines.push('⚔️ 当前属性')
       lines.push(`  气血 ${Math.floor(p.hp)}/${st.hp}（${formatPct(p.hp, st.hp)}%）`)
       lines.push(`  真元 ${Math.floor(p.mp)}/${st.mp}（${formatPct(p.mp, st.mp)}%）`)
@@ -176,7 +181,6 @@ export function registerBaseCommands(ctx: Context) {
       lines.push(`  会心 ${(st.crit * 100).toFixed(1)}%   暴伤 ${(st.critDmg * 100).toFixed(0)}%   穿透 ${(st.pen * 100).toFixed(1)}%`)
       lines.push('')
 
-      // 已学
       lines.push(`📖 已学功法数（${learned.gongfa.length}）`)
       lines.push(`📚 已学辅修数（${learned.fuxiu.length}）`)
       lines.push(`✨ 已学神通数（${learned.shentong.length}）`)
@@ -192,7 +196,6 @@ export function registerBaseCommands(ctx: Context) {
       lines.push(`使用「我的功法」、「我的神通」查看详情`)
       lines.push('')
 
-      // 炼体境界
       const bodyLevelId = p.exercisesLevel
       const bodyLevel = bodyLevelId ? data.bodyLevels[bodyLevelId] : undefined
       if (bodyLevel) {
@@ -203,7 +206,6 @@ export function registerBaseCommands(ctx: Context) {
         if (bodyModStr) lines.push(`  加成：${bodyModStr}`)
       }
 
-      // 装备
       lines.push('已装备')
       for (const eq of equipItems) {
         if (!eq.id) {
@@ -217,7 +219,6 @@ export function registerBaseCommands(ctx: Context) {
       }
       lines.push('')
 
-      // 突破
       lines.push('⚡ 突破')
       if (!info.nextLevelId) {
         lines.push('  已至绝巅，唯有飞升')
@@ -229,8 +230,6 @@ export function registerBaseCommands(ctx: Context) {
       }
       lines.push('')
 
-      // 其它
-      // 宗门行：查 sect 表拿名称
       let sectLine = '无'
       if (p.sectId && p.sectId > 0) {
         const [sect] = await ctx.database.get(TABLE.sect, { sectId: p.sectId })
@@ -238,12 +237,10 @@ export function registerBaseCommands(ctx: Context) {
           const POSITION_NAMES = ['散修', '宗主', '长老', '亲传弟子', '内门弟子', '外门弟子']
           sectLine = `${sect.sectName}（${POSITION_NAMES[p.sectPosition] || '未知错误'}）  贡献 ${p.sectContribution}`
         } else {
-          // sectId 指向不存在的宗门（脏数据）→ 显示异常提示，不崩
           sectLine = `数据异常（编号 ${p.sectId}）`
         }
       }
       lines.push(`🏛️ 宗门：${sectLine}`)
-      
       lines.push(`🏞️ 洞府：${p.blessedSpotFlag ? p.blessedSpotName : '无'}`)
 
       return lines.join('\n')
@@ -268,7 +265,6 @@ export function registerBaseCommands(ctx: Context) {
         : rec.winner === 'b' ? rec.opponentName
           : '平局'
 
-      // 按回合分组
       const grouped = new Map<number, string[]>()
       for (const e of rec.log) {
         if (!grouped.has(e.round)) grouped.set(e.round, [])
@@ -302,7 +298,6 @@ export function registerBaseCommands(ctx: Context) {
     .action(async ({ session }, type = '境界') => {
       const limit = 10
       if (type === '灵石') {
-        // 从 monetary 拉 uid 列表（若服务可用）
         if (!ctx.get('monetary')) return '灵石排行榜需 monetary 服务'
         const all = await ctx.database.get(TABLE.player, {})
         const rows = await Promise.all(all.map(async p => ({ p, s: await getStone(ctx, p.uid) })))
@@ -315,7 +310,6 @@ export function registerBaseCommands(ctx: Context) {
         return '⚔️ 战力排行榜 TOP10\n' + rows
           .map((r, i) => `${i + 1}. ${r.userName} - ${r.power}`).join('\n')
       }
-      // 默认境界
       const rows = await ctx.database.get(TABLE.player, {}, { limit: 500 })
       rows.sort((a, b) => parseInt(b.level) - parseInt(a.level) || b.exp - a.exp)
       return '🌌 境界排行榜 TOP10\n' + rows.slice(0, limit)
