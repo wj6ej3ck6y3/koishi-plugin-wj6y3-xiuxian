@@ -195,13 +195,12 @@ async function doBreakthrough(ctx: Context, session: any, useDue: boolean) {
     return `✨ 突破成功！晋升「${getLevel(p.level)?.name}」！${oneShotNote}${dueNote}`
   }
 
-  const rateGain = Math.round((ctx as any).config?.breakthroughFailRateGain ?? 5)
+  // ✅ 新代码
+  const maxGain = Math.max(1, Math.floor((ctx as any).config.breakthroughFailRateGain))
+  const rateGain = 1 + Math.floor(Math.random() * maxGain)   // 1 ~ maxGain（含两端）
   const loss = dueProtect ? 0 : Math.floor(info.expRequired * ((ctx as any).config?.breakthroughFailLossRatio ?? 0.3))
   p.exp = Math.max(0, p.exp - loss)
   p.levelUpRate = (p.levelUpRate || 0) + rateGain
-  await ctx.database.set(TABLE.player, { userId: p.userId }, {
-    exp: p.exp, levelUpRate: p.levelUpRate, levelUpCd: cdStamp,
-  })
 
   // ✅ 失败后重新计算总突破率（基础 + 新累计 + 单次丹）
   const newInfo = checkBreakthrough(p)

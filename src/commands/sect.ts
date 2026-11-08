@@ -474,7 +474,7 @@ export function registerSectCommands(ctx: Context) {
     })
 
   // ================= 完成宗门任务 =================
-  ctx.command('完成宗门任务', '挑战任务妖兽')
+  ctx.command('完成宗门任务', '挑战任务妖兽').alias('宗门任务完成')
     .action(async ({ session }) => {
       const prep = await preparePlayerBattle(ctx, session)
       if (typeof prep === 'string') return prep
