@@ -201,15 +201,11 @@ export function registerBossCommands(ctx: Context) {
       // 累积参战伤害
       const exist = await ctx.database.get(TABLE.bossP, { bossId: boss.id, uid: p.uid })
       const oldDmg = exist[0]?.damage ?? 0
-      if (exist[0]) {
-        await ctx.database.set(TABLE.bossP, { bossId: boss.id, uid: p.uid }, {
-          damage: oldDmg + myDmg,
-        })
-      } else {
-        await ctx.database.create(TABLE.bossP, {
-          bossId: boss.id, uid: p.uid, platform: session.platform, damage: myDmg,
-        })
-      }
+      await ctx.database.upsert(
+        TABLE.bossP,
+        [{ bossId: boss.id, uid: p.uid, platform: session.platform, damage: oldDmg + myDmg }],
+        ['bossId', 'uid'],
+      )
 
       await ctx.database.set(TABLE.boss, { id: boss.id }, { hp: Math.max(0, bossUnit.hp) })
       p.hp = me.hp
