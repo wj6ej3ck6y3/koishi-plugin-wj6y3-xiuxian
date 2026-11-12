@@ -3,9 +3,10 @@ import { Context } from 'koishi'
 // ================= 行类型定义 =================
 
 export interface Player {
-  userId: string
+  /** 主键：Koishi 用户 ID（跨平台唯一，取决于是否接入 account 服务） */
+  uid: number
+  /** 建号平台，仅作参考记录 */
   platform: string
-  uid: number | null
   root: string
   level: string
   exercisesLevel: string
@@ -37,12 +38,11 @@ export interface Player {
   rebirth: number
   dualCultivation: number
   dualCultivationTime: Date
-  /** 参悟天机 CD 时间戳（B8：由内存 Map 迁移到落库） */
   insightCd: Date
 }
 
 export interface CdRow {
-  userId: string
+  uid: number
   type: number
   createTime: Date
   scheduledTime: number
@@ -51,7 +51,7 @@ export interface CdRow {
 export interface SectRow {
   sectId: number
   sectName: string
-  sectOwner: string
+  sectOwnerUid: number
   sectScale: number
   sectFairyland: number
   sectMaterials: number
@@ -62,7 +62,7 @@ export interface SectRow {
 }
 
 export interface BackpackItem {
-  userId: string
+  uid: number
   goodsId: number
   goodsNum: number
   createTime: Date
@@ -75,7 +75,7 @@ export interface BackpackItem {
 }
 
 export interface BuffRow {
-  userId: string
+  uid: number
   mainBuff: number
   secBuff: number
   subBuff: number
@@ -88,17 +88,17 @@ export interface BuffRow {
 }
 
 export interface QuestRow {
-  userId: string
+  uid: number
   questId: number
 }
 
 export interface SkillRow {
-  userId: string
+  uid: number
   skillId: number
 }
 
 export interface WorkRow {
-  userId: string
+  uid: number
   workName: string
   itemId: number
   startTime: Date
@@ -115,20 +115,20 @@ export interface BossRow {
 
 export interface BossParticipant {
   bossId: number
-  userId: string
+  uid: number
   platform: string
   damage: number
 }
 
 export interface BankRow {
-  userId: string
+  uid: number
   saveStone: number
   saveTime: Date
   bankLevel: number
 }
 
 export interface PlotRow {
-  userId: string
+  uid: number
   plotIndex: number
   plantId: number
   plantAt: Date
@@ -137,7 +137,8 @@ export interface PlotRow {
 
 export interface ShopRow {
   id: number
-  sellerId: string
+  /** 0 表示系统挂单 */
+  sellerUid: number
   sellerName: string
   goodsId: number
   price: number
@@ -146,14 +147,14 @@ export interface ShopRow {
 }
 
 export interface PillUsedRow {
-  userId: string
+  uid: number
   pillId: number
   targetLevelId: string
   usedAt: Date
 }
 
 export interface BountyListRow {
-  userId: string
+  uid: number
   slot: number
   questKey: string
   dropJson: string
@@ -161,7 +162,7 @@ export interface BountyListRow {
   createdAt: Date
 }
 
-// ================= 关键：扩展 Koishi 全局 Tables =================
+// ================= 扩展 Koishi 全局 Tables =================
 
 declare module 'koishi' {
   interface Tables {
@@ -184,7 +185,7 @@ declare module 'koishi' {
   }
 }
 
-// ================= 表名常量（as const 保证字面量类型） =================
+// ================= 表名常量 =================
 
 export const TABLE = {
   player: 'wj6y3_xiuxian_player',
@@ -204,13 +205,12 @@ export const TABLE = {
   bountyList: 'wj6y3_xiuxian_bounty_list',
 } as const
 
-// ================= defineModels：字段值必须是字面量 =================
+// ================= defineModels =================
 
 export function defineModels(ctx: Context) {
   ctx.model.extend('wj6y3_xiuxian_player', {
-    userId: 'string',
-    platform: 'string',
     uid: 'unsigned',
+    platform: 'string',
     root: 'string',
     level: 'string',
     exercisesLevel: 'string',
@@ -243,19 +243,19 @@ export function defineModels(ctx: Context) {
     dualCultivation: 'integer',
     dualCultivationTime: 'timestamp',
     insightCd: 'timestamp',
-  }, { primary: ['userId'] })
+  }, { primary: ['uid'] })
 
   ctx.model.extend('wj6y3_xiuxian_cd', {
-    userId: 'string',
+    uid: 'unsigned',
     type: 'integer',
     createTime: 'timestamp',
     scheduledTime: 'integer',
-  }, { primary: ['userId'] })
+  }, { primary: ['uid'] })
 
   ctx.model.extend('wj6y3_xiuxian_sect', {
     sectId: 'unsigned',
     sectName: 'string',
-    sectOwner: 'string',
+    sectOwnerUid: 'unsigned',
     sectScale: 'double',
     sectFairyland: 'integer',
     sectMaterials: 'double',
@@ -266,7 +266,7 @@ export function defineModels(ctx: Context) {
   }, { primary: ['sectId'] })
 
   ctx.model.extend('wj6y3_xiuxian_back', {
-    userId: 'string',
+    uid: 'unsigned',
     goodsId: 'unsigned',
     goodsNum: 'integer',
     createTime: 'timestamp',
@@ -276,10 +276,10 @@ export function defineModels(ctx: Context) {
     actionTime: 'timestamp',
     state: 'integer',
     bindNum: 'integer',
-  }, { primary: ['userId', 'goodsId'] })
+  }, { primary: ['uid', 'goodsId'] })
 
   ctx.model.extend('wj6y3_xiuxian_buff', {
-    userId: 'string',
+    uid: 'unsigned',
     mainBuff: 'integer',
     secBuff: 'integer',
     subBuff: 'integer',
@@ -289,24 +289,24 @@ export function defineModels(ctx: Context) {
     blessedSpot: 'integer',
     furnaceBuff: 'integer',
     qiFlagBuff: 'integer',
-  }, { primary: ['userId'] })
+  }, { primary: ['uid'] })
 
   ctx.model.extend('wj6y3_xiuxian_quest', {
-    userId: 'string',
+    uid: 'unsigned',
     questId: 'integer',
-  }, { primary: ['userId'] })
+  }, { primary: ['uid'] })
 
   ctx.model.extend('wj6y3_xiuxian_skill', {
-    userId: 'string',
+    uid: 'unsigned',
     skillId: 'unsigned',
-  }, { primary: ['userId', 'skillId'] })
+  }, { primary: ['uid', 'skillId'] })
 
   ctx.model.extend('wj6y3_xiuxian_work', {
-    userId: 'string',
+    uid: 'unsigned',
     workName: 'string',
     itemId: 'integer',
     startTime: 'timestamp',
-  }, { primary: ['userId'] })
+  }, { primary: ['uid'] })
 
   ctx.model.extend('wj6y3_xiuxian_boss', {
     id: 'unsigned',
@@ -319,29 +319,29 @@ export function defineModels(ctx: Context) {
 
   ctx.model.extend('wj6y3_xiuxian_boss_participant', {
     bossId: 'unsigned',
-    userId: 'string',
+    uid: 'unsigned',
     platform: 'string',
     damage: 'double',
-  }, { primary: ['bossId', 'userId'] })
+  }, { primary: ['bossId', 'uid'] })
 
   ctx.model.extend('wj6y3_xiuxian_bank', {
-    userId: 'string',
+    uid: 'unsigned',
     saveStone: 'double',
     saveTime: 'timestamp',
     bankLevel: 'integer',
-  }, { primary: ['userId'] })
+  }, { primary: ['uid'] })
 
   ctx.model.extend('wj6y3_xiuxian_plot', {
-    userId: 'string',
+    uid: 'unsigned',
     plotIndex: 'integer',
     plantId: 'integer',
     plantAt: 'timestamp',
     plantMinutes: 'integer',
-  }, { primary: ['userId', 'plotIndex'] })
+  }, { primary: ['uid', 'plotIndex'] })
 
   ctx.model.extend('wj6y3_xiuxian_shop', {
     id: 'unsigned',
-    sellerId: 'string',
+    sellerUid: 'unsigned',
     sellerName: 'string',
     goodsId: 'integer',
     price: 'integer',
@@ -350,20 +350,20 @@ export function defineModels(ctx: Context) {
   }, { primary: ['id'] })
 
   ctx.model.extend('wj6y3_xiuxian_pill_used', {
-    userId: 'string',
+    uid: 'unsigned',
     pillId: 'unsigned',
     targetLevelId: 'string',
     usedAt: 'timestamp',
-  }, { primary: ['userId', 'pillId'] })
+  }, { primary: ['uid', 'pillId'] })
 
   ctx.model.extend('wj6y3_xiuxian_bounty_list', {
-    userId: 'string',
+    uid: 'unsigned',
     slot: 'integer',
     questKey: 'string',
     dropJson: 'string',
     successRate: 'integer',
     createdAt: 'timestamp',
-  }, { primary: ['userId', 'slot'] })
+  }, { primary: ['uid', 'slot'] })
 }
 
 export interface MonetaryRow {

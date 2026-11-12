@@ -7,6 +7,7 @@ import {
   getPlayer, getStone,
   formatRemainTime,
   getAffectedRows,
+  resolveAtUid,
 } from '../utils'
 
 export function registerLongtermCommands(ctx: Context) {
@@ -25,12 +26,11 @@ export function registerLongtermCommands(ctx: Context) {
       }
 
       const p = await requirePlayer(ctx, session)
-      if (p.uid === null) return '灵石服务未同步'
 
       const lv1 = getLevel('1')!
       const [rootId, root] = rollRoot()
 
-      await ctx.database.set(TABLE.player, { userId: p.userId }, {
+      await ctx.database.set(TABLE.player, { uid: p.uid }, {
         level: '1', exp: 0, rebirth: 0,
         levelUpRate: 0, levelUpCd: new Date(0),
         exercisesLevel: '20001',
@@ -49,21 +49,21 @@ export function registerLongtermCommands(ctx: Context) {
         insightCd: new Date(0),
       })
 
-      await ctx.database.remove(TABLE.skill, { userId: p.userId })
-      await ctx.database.remove(TABLE.buff, { userId: p.userId })
-      await ctx.database.remove(TABLE.pillUsed, { userId: p.userId })
-      await ctx.database.remove(TABLE.back, { userId: p.userId })
-      await ctx.database.remove(TABLE.bank, { userId: p.userId })
-      await ctx.database.remove(TABLE.plot, { userId: p.userId })
-      await ctx.database.remove(TABLE.cd, { userId: p.userId })
-      await ctx.database.remove(TABLE.quest, { userId: p.userId })
-      await ctx.database.remove(TABLE.work, { userId: p.userId })
-      await ctx.database.remove(TABLE.bountyList, { userId: p.userId })
+      await ctx.database.remove(TABLE.skill, { uid: p.uid })
+      await ctx.database.remove(TABLE.buff, { uid: p.uid })
+      await ctx.database.remove(TABLE.pillUsed, { uid: p.uid })
+      await ctx.database.remove(TABLE.back, { uid: p.uid })
+      await ctx.database.remove(TABLE.bank, { uid: p.uid })
+      await ctx.database.remove(TABLE.plot, { uid: p.uid })
+      await ctx.database.remove(TABLE.cd, { uid: p.uid })
+      await ctx.database.remove(TABLE.quest, { uid: p.uid })
+      await ctx.database.remove(TABLE.work, { uid: p.uid })
+      await ctx.database.remove(TABLE.bountyList, { uid: p.uid })
 
       const curStone = await getStone(ctx, p.uid)
       if (curStone > 0) await costStone(ctx, p.uid, curStone)
 
-      const updated = await getPlayer(ctx, p.userId)
+      const updated = await getPlayer(ctx, p.uid)
       if (updated) await refreshPlayerStats(ctx, updated)
 
       return [
@@ -82,12 +82,12 @@ export function registerLongtermCommands(ctx: Context) {
       if (p.atkPractice >= 9) return '攻击修炼已达 9 重'
       const cost = 1_000_000 * Math.pow(2, p.atkPractice)
       if (!(await costStone(ctx, p.uid, cost))) return `需 ${cost} 灵石`
-      await ctx.database.set(TABLE.player, { userId: p.userId }, { atkPractice: p.atkPractice + 1 })
+      await ctx.database.set(TABLE.player, { uid: p.uid }, { atkPractice: p.atkPractice + 1 })
       await refreshPlayerStats(ctx, p)
       return `🗿 攻击修炼提升至 ${p.atkPractice + 1} 重（+${(p.atkPractice + 1) * 4}% 攻击）`
     })
 
-  // ===== 参悟天机（B8：内存 CD → 落库 insightCd + 原子占位） =====
+  // ===== 参悟天机 =====
   ctx.command('参悟天机', '随机顿悟').alias('顿悟')
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
@@ -95,25 +95,22 @@ export function registerLongtermCommands(ctx: Context) {
 
       // 老数据懒迁移：insightCd 为空时补 new Date(0)
       if (!p.insightCd) {
-        await ctx.database.set(TABLE.player, { userId: p.userId }, { insightCd: new Date(0) })
+        await ctx.database.set(TABLE.player, { uid: p.uid }, { insightCd: new Date(0) })
         p.insightCd = new Date(0)
       }
 
       const oldCd = +new Date(p.insightCd)
       if (now < oldCd) return `CD 中，还需 ${formatRemainTime(oldCd - now)}`
 
-      // ✅ 原子占位：只有旧 insightCd 仍是本次读到的值时才成功，防并发双触发
       const newCd = new Date(now + 60 * 60 * 1000)
       const writeRes: any = await ctx.database.set(TABLE.player, {
-        userId: p.userId,
+        uid: p.uid,
         insightCd: new Date(oldCd),
       }, { insightCd: newCd })
 
       const affected = getAffectedRows(writeRes)
-      // ✅ 只有明确「修改 0 行」才判定被并发抢走；-1（adapter 不提供行数）按乐观处理
       if (affected === 0) return 'CD 中，请稍后再试'
 
-      // 30% 失败无事发生
       if (Math.random() < 0.3) {
         return '🌫️ 参悟天机，却未能有所收获……'
       }
@@ -126,7 +123,7 @@ export function registerLongtermCommands(ctx: Context) {
 
       p.exp += gainExp
       p.levelUpRate = (p.levelUpRate || 0) + gainRate
-      await ctx.database.set(TABLE.player, { userId: p.userId }, {
+      await ctx.database.set(TABLE.player, { uid: p.uid }, {
         exp: p.exp, levelUpRate: p.levelUpRate,
       })
 
@@ -138,7 +135,6 @@ export function registerLongtermCommands(ctx: Context) {
     .alias('飞升').alias('转世')
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
-      if (p.uid === null) return '灵石服务未同步'
 
       const cfgMax = (ctx as any).config?.rebirthMaxLevel
       const maxLevelId = cfgMax && cfgMax !== ''
@@ -154,7 +150,7 @@ export function registerLongtermCommands(ctx: Context) {
 
       const [rootId, root] = rollRootExcluding(newRebirth)
 
-      await ctx.database.set(TABLE.player, { userId: p.userId }, {
+      await ctx.database.set(TABLE.player, { uid: p.uid }, {
         level: '1', exp: 0, rebirth: newRebirth,
         levelUpRate: 0, levelUpCd: new Date(0),
         exercisesLevel: '20001',
@@ -170,20 +166,20 @@ export function registerLongtermCommands(ctx: Context) {
         root: rootId,
       })
 
-      await ctx.database.remove(TABLE.skill, { userId: p.userId })
+      await ctx.database.remove(TABLE.skill, { uid: p.uid })
 
-      await ctx.database.set(TABLE.buff, { userId: p.userId }, {
+      await ctx.database.set(TABLE.buff, { uid: p.uid }, {
         mainBuff: 0, secBuff: 0, subBuff: 0,
         faqiBuff: 0, armorBuff: 0, atkBuff: 0,
         furnaceBuff: 0, qiFlagBuff: 0,
       } as any)
 
-      await ctx.database.remove(TABLE.pillUsed, { userId: p.userId })
-      await ctx.database.remove(TABLE.back, { userId: p.userId })
+      await ctx.database.remove(TABLE.pillUsed, { uid: p.uid })
+      await ctx.database.remove(TABLE.back, { uid: p.uid })
 
-      const [bankRow] = await ctx.database.get(TABLE.bank, { userId: p.userId })
+      const [bankRow] = await ctx.database.get(TABLE.bank, { uid: p.uid })
       if (bankRow) {
-        await ctx.database.set(TABLE.bank, { userId: p.userId }, {
+        await ctx.database.set(TABLE.bank, { uid: p.uid }, {
           saveStone: 0,
           saveTime: new Date(),
         })
@@ -192,12 +188,12 @@ export function registerLongtermCommands(ctx: Context) {
       const curStone = await getStone(ctx, p.uid)
       if (curStone > 0) await costStone(ctx, p.uid, curStone)
 
-      await ctx.database.remove(TABLE.cd, { userId: p.userId })
-      await ctx.database.remove(TABLE.quest, { userId: p.userId })
-      await ctx.database.remove(TABLE.work, { userId: p.userId })
-      await ctx.database.remove(TABLE.bountyList, { userId: p.userId })
+      await ctx.database.remove(TABLE.cd, { uid: p.uid })
+      await ctx.database.remove(TABLE.quest, { uid: p.uid })
+      await ctx.database.remove(TABLE.work, { uid: p.uid })
+      await ctx.database.remove(TABLE.bountyList, { uid: p.uid })
 
-      const updated = await getPlayer(ctx, p.userId)
+      const updated = await getPlayer(ctx, p.uid)
       if (updated) await refreshPlayerStats(ctx, updated)
 
       const excludedNote = newRebirth >= 29
@@ -220,15 +216,16 @@ export function registerLongtermCommands(ctx: Context) {
   ctx.command('双修', '与道侣双修')
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
-      const target = (session as any).elements?.find((e: any) => e.type === 'at')?.attrs?.id
-      if (!target) return '请 @ 道侣'
-      if (target === p.userId) return '不能与自己双修'
+      const targetUid = await resolveAtUid(ctx, session)
+      if (targetUid === null) return '请 @ 道侣（对方需在本平台使用过 bot）'
+      if (targetUid === p.uid) return '不能与自己双修'
 
-      const t = await ctx.database.get(TABLE.player, { userId: target })
+      const t = await ctx.database.get(TABLE.player, { uid: targetUid })
       if (!t[0]) return '对方尚未入仙途'
+      const target = t[0]
 
       const myLvNum = parseInt(p.level, 10) || 1
-      const targetLvNum = parseInt(t[0].level, 10) || 1
+      const targetLvNum = parseInt(target.level, 10) || 1
       if (myLvNum < targetLvNum - 3) {
         return '对方看了你一眼，冷哼着离开了。'
       }
@@ -239,25 +236,25 @@ export function registerLongtermCommands(ctx: Context) {
       if (last.toDateString() !== dayKey) cnt = 0
       if (cnt >= 3) return '今日双修次数已用尽'
 
-      const baseExp = (p.exp + t[0].exp) / 200
+      const baseExp = (p.exp + target.exp) / 200
       const gain = Math.floor(baseExp * (0.75 + Math.random() * 0.5))
 
       p.exp += gain
-      t[0].exp += gain
+      target.exp += gain
       let rateMsg = ''
       if (Math.random() < 0.1) {
         p.levelUpRate = (p.levelUpRate || 0) + 2
-        t[0].levelUpRate = (t[0].levelUpRate || 0) + 2
+        target.levelUpRate = (target.levelUpRate || 0) + 2
         rateMsg = '，双方突破率 +2%'
       }
-      await ctx.database.set(TABLE.player, { userId: p.userId }, {
+      await ctx.database.set(TABLE.player, { uid: p.uid }, {
         exp: p.exp, dualCultivation: cnt + 1, dualCultivationTime: new Date(),
         levelUpRate: p.levelUpRate,
       })
-      await ctx.database.set(TABLE.player, { userId: target }, {
-        exp: t[0].exp, levelUpRate: t[0].levelUpRate,
+      await ctx.database.set(TABLE.player, { uid: target.uid }, {
+        exp: target.exp, levelUpRate: target.levelUpRate,
       })
-      return `与 ${t[0].userName} 双修，双方修为 +${gain}${rateMsg}`
+      return `与 ${target.userName} 双修，双方修为 +${gain}${rateMsg}`
     })
 }
 

@@ -5,16 +5,17 @@ import { requirePlayer, addItem, removeItem, getBuff } from '../utils'
 
 interface CraftResult { index: number; pillId: string; name: string; mainId: string; auxId: string }
 
-const recipeCache = new Map<string, CraftResult[]>()
+// ✅ key 从 userId(string) 改为 uid(number)
+const recipeCache = new Map<number, CraftResult[]>()
 
 export function registerAlchemyCommands(ctx: Context) {
-  ctx.command('炼丹帮助', '炼丹指令').action(() =>[
+  ctx.command('炼丹帮助', '炼丹指令').action(() => [
     '炼丹          扫描背包列出可炼制丹方',
     '炼制 <序号>   炼制指定丹方',
     '炼丹配方帮助   冷热调和机制'
   ].join('\n'))
 
-  ctx.command('炼丹配方帮助', '机制说明').action(() =>[
+  ctx.command('炼丹配方帮助', '机制说明').action(() => [
     '📖 主药 + 药引需冷热调和（主药性 + 药引性 ≈ 0）',
     '辅药决定丹药类型。持有炼丹炉方可炼丹。',
   ].join('\n'))
@@ -22,9 +23,9 @@ export function registerAlchemyCommands(ctx: Context) {
   ctx.command('炼丹', '列出可炼丹方')
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
-      const buff = await getBuff(ctx, p.userId)
+      const buff = await getBuff(ctx, p.uid)
       if (!buff.furnaceBuff) return '⚠️ 尚未装备炼丹炉，无法炼丹'
-      const items = await ctx.database.get(TABLE.back, { userId: p.userId })
+      const items = await ctx.database.get(TABLE.back, { uid: p.uid })
       const have = new Map(items.map(it => [String(it.goodsId), it.goodsNum]))
       const list: CraftResult[] = []
 
@@ -58,7 +59,7 @@ export function registerAlchemyCommands(ctx: Context) {
         if (list.length >= 20) break
       }
 
-      recipeCache.set(p.userId, list)
+      recipeCache.set(p.uid, list)
       if (!list.length) return '背包中没有可炼制的丹方'
       return '⚗️ 可炼制丹方（发送「炼制 <序号>」）\n' +
         list.slice(0, 20).map(r => {
@@ -72,7 +73,7 @@ export function registerAlchemyCommands(ctx: Context) {
     .action(async ({ session }, no) => {
       if (!no) return '请输入序号'
       const p = await requirePlayer(ctx, session)
-      const list = recipeCache.get(p.userId) || []
+      const list = recipeCache.get(p.uid) || []
       const r = list[no - 1]
       if (!r) return '序号不存在'
 
@@ -90,7 +91,7 @@ export function registerAlchemyCommands(ctx: Context) {
       const { mainCount, auxCount } = pill.craft
 
       // ✅ 防御 2：主药 / 辅药独立检查（mainId !== auxId 已在上面保证）
-      const items = await ctx.database.get(TABLE.back, { userId: p.userId })
+      const items = await ctx.database.get(TABLE.back, { uid: p.uid })
       const haveMain = items.find(i => String(i.goodsId) === r.mainId)?.goodsNum || 0
       const haveAux = items.find(i => String(i.goodsId) === r.auxId)?.goodsNum || 0
       if (haveMain < mainCount) {
@@ -101,7 +102,6 @@ export function registerAlchemyCommands(ctx: Context) {
       }
 
       // 冷热调和（暂沿用原逻辑：主药温度 + 主药自身药引温度）
-      // ⚠️ 数据侧 `aux` 只有 [类型, 数量]，无温度字段，故未将辅药纳入冷热判定
       if (herb.main?.[0] !== 0) {
         const guideSum = herb.main[0] + (herb.guide?.[0] ?? 0)
         if (guideSum !== 0) {
@@ -111,20 +111,20 @@ export function registerAlchemyCommands(ctx: Context) {
 
       // 成功率
       let rate = 60 + (pill.craft.successCap - 60) * 0.5
-      const buff = await getBuff(ctx, p.userId)
+      const buff = await getBuff(ctx, p.uid)
       const furnace = buff.furnaceBuff ? data.furnaces[String(buff.furnaceBuff)] : undefined
       if (furnace?.bonusSuccess) rate += furnace.bonusSuccess * 100
       if (rate > 100) rate = 100
 
       // ✅ 防御 3：统一扣料封装；用 { ok: boolean; reason?: string } 避开判别联合窄化问题
       const consumeMaterials = async (): Promise<{ ok: boolean; reason?: string }> => {
-        const okMain = await removeItem(ctx, p.userId, Number(r.mainId), mainCount)
+        const okMain = await removeItem(ctx, p.uid, Number(r.mainId), mainCount)
         if (!okMain) {
           return { ok: false, reason: `主药「${herb.name}」扣除失败（库存变动）` }
         }
-        const okAux = await removeItem(ctx, p.userId, Number(r.auxId), auxCount)
+        const okAux = await removeItem(ctx, p.uid, Number(r.auxId), auxCount)
         if (!okAux) {
-          await addItem(ctx, p.userId, Number(r.mainId), mainCount)   // 回滚主药
+          await addItem(ctx, p.uid, Number(r.mainId), mainCount)   // 回滚主药
           return { ok: false, reason: `辅药「${aux.name}」扣除失败（库存变动）` }
         }
         return { ok: true }
@@ -142,7 +142,7 @@ export function registerAlchemyCommands(ctx: Context) {
       if (!consumed.ok) return `⚠️ 炼制中止：${consumed.reason ?? '未知错误'}`
 
       const qty = 1 + (furnace?.bonusQuantity ?? 0)
-      await addItem(ctx, p.userId, Number(r.pillId), qty)
+      await addItem(ctx, p.uid, Number(r.pillId), qty)
       return `⚗️ 炼制成功！获得「${pill.name}」×${qty}（主药：${herb.name} / 辅药：${aux.name}）`
     })
 }

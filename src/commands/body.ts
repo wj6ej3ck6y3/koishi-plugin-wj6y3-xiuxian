@@ -1,8 +1,7 @@
 import { Context } from 'koishi'
 import { data } from '../data'
 import { TABLE } from '../models'
-import { requirePlayer, costStone, refreshPlayerStats,statLabel } from '../utils'
-// 注意：utils 中已有 getBodyLevel re-export
+import { requirePlayer, costStone, refreshPlayerStats, statLabel } from '../utils'
 
 export function registerBodyCommands(ctx: Context) {
   ctx.command('炼体帮助', '炼体说明').action(() => [
@@ -19,7 +18,6 @@ export function registerBodyCommands(ctx: Context) {
 
       const lines: string[] = []
 
-      // ✅ 当前境界 + 当前加成
       if (cur) {
         lines.push(`当前炼体：${cur.name}`)
         if (cur.modifiers && cur.modifiers.length > 0) {
@@ -30,7 +28,6 @@ export function registerBodyCommands(ctx: Context) {
       }
       lines.push('')
 
-      // ✅ 下一层：消耗 / 成功率 / 达成后的总加成
       if (next) {
         const costPart = next.costStone != null ? `消耗 ${next.costStone} 灵石，` : ''
         const probPart = next.probability != null ? `成功率 ${next.probability}%` : ''
@@ -55,7 +52,7 @@ export function registerBodyCommands(ctx: Context) {
       if (!(await costStone(ctx, p.uid, next.costStone))) return `需 ${next.costStone} 灵石`
       const success = Math.random() * 100 < next.probability
       if (!success) return `💥 炼体失败，损失 ${next.costStone} 灵石`
-      await ctx.database.set(TABLE.player, { userId: p.userId }, { exercisesLevel: nextId })
+      await ctx.database.set(TABLE.player, { uid: p.uid }, { exercisesLevel: nextId })
       await refreshPlayerStats(ctx, p)
       return `🗿 炼体成功！晋升「${next.name}」`
     })

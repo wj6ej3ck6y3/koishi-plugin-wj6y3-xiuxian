@@ -20,16 +20,16 @@ export function registerBankCommands(ctx: Context) {
     ].join('\n'))
 
   // ✅ B7：load 包 try/catch，并发 create 冲突时重读
-  async function load(ctx: Context, userId: string) {
-    const rows = await ctx.database.get(TABLE.bank, { userId })
+  async function load(ctx: Context, uid: number) {
+    const rows = await ctx.database.get(TABLE.bank, { uid })
     if (rows[0]) return rows[0]
-    const row = { userId, saveStone: 0, saveTime: new Date(), bankLevel: 1 }
+    const row = { uid, saveStone: 0, saveTime: new Date(), bankLevel: 1 }
     try {
       await ctx.database.create(TABLE.bank, row)
       return row
     } catch {
       // 并发下可能已被其他请求创建
-      const again = await ctx.database.get(TABLE.bank, { userId })
+      const again = await ctx.database.get(TABLE.bank, { uid })
       if (again[0]) return again[0]
       throw new Error('灵庄数据创建失败')
     }
@@ -49,7 +49,7 @@ export function registerBankCommands(ctx: Context) {
 
     bank.saveStone += banked
     bank.saveTime = new Date()
-    await ctx.database.set(TABLE.bank, { userId: p.userId }, {
+    await ctx.database.set(TABLE.bank, { uid: p.uid }, {
       saveStone: bank.saveStone,
       saveTime: bank.saveTime,
     })
@@ -70,7 +70,7 @@ export function registerBankCommands(ctx: Context) {
         return `⚠️ 灵石不足（当前 ${balance}，需 ${amount}）`
       }
 
-      const bank = await load(ctx, p.userId)
+      const bank = await load(ctx, p.uid)
       const cfg = LEVELS[bank.bankLevel - 1] ?? LEVELS[0]
 
       // ① 用「原始存款」计算本次利息（新存入不参与这段计息）
@@ -93,7 +93,7 @@ export function registerBankCommands(ctx: Context) {
       const direct = gain - banked
 
       bank.saveStone = saveAfterDeposit + banked
-      await ctx.database.set(TABLE.bank, { userId: p.userId }, {
+      await ctx.database.set(TABLE.bank, { uid: p.uid }, {
         saveStone: bank.saveStone,
         saveTime: new Date(),
       })
@@ -127,7 +127,7 @@ export function registerBankCommands(ctx: Context) {
     .action(async ({ session }, amount) => {
       if (!amount || amount <= 0) return '请输入数量'
       const p = await requirePlayer(ctx, session)
-      const bank = await load(ctx, p.userId)
+      const bank = await load(ctx, p.uid)
       const cfg = LEVELS[bank.bankLevel - 1] ?? LEVELS[0]
 
       const s = await settle(ctx, p, bank)
@@ -149,7 +149,7 @@ export function registerBankCommands(ctx: Context) {
 
       bank.saveStone -= amount
       await addStone(ctx, p.uid, amount)
-      await ctx.database.set(TABLE.bank, { userId: p.userId }, { saveStone: bank.saveStone })
+      await ctx.database.set(TABLE.bank, { uid: p.uid }, { saveStone: bank.saveStone })
 
       return [
         ...settleLines,
@@ -161,7 +161,7 @@ export function registerBankCommands(ctx: Context) {
   ctx.command('灵庄结算', '结算利息')
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
-      const bank = await load(ctx, p.userId)
+      const bank = await load(ctx, p.uid)
       const cfg = LEVELS[bank.bankLevel - 1] ?? LEVELS[0]
       const s = await settle(ctx, p, bank)
 
@@ -182,13 +182,13 @@ export function registerBankCommands(ctx: Context) {
   ctx.command('灵庄升级', '升级')
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
-      const bank = await load(ctx, p.userId)
+      const bank = await load(ctx, p.uid)
       const next = LEVELS[bank.bankLevel]
       if (!next) return '已是最高等级'
       if (!(await costStone(ctx, p.uid, next.upFee))) return `需 ${next.upFee} 灵石`
 
       const writeRes: any = await ctx.database.set(TABLE.bank, {
-        userId: p.userId,
+        uid: p.uid,
         bankLevel: bank.bankLevel,
       }, { bankLevel: next.lv })
 
@@ -205,7 +205,7 @@ export function registerBankCommands(ctx: Context) {
   ctx.command('灵庄信息', '查询存款信息').alias('查看灵庄').alias('灵庄')
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
-      const bank = await load(ctx, p.userId)
+      const bank = await load(ctx, p.uid)
       const cfg = LEVELS[bank.bankLevel - 1]
       const next = LEVELS[bank.bankLevel]
       return [

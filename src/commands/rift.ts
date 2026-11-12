@@ -43,16 +43,16 @@ function formatDrops(drops: DropEntry[]): string {
 }
 
 export function registerRiftCommands(ctx: Context) {
-  ctx.command('秘境帮助', '说明').action(() =>[
-      '🌀 探索秘境：每日 3 次、1 小时 CD，随机获得灵石 / 修为 / 物品，或受伤。',
-    ].join('\n'))
+  ctx.command('秘境帮助', '说明').action(() => [
+    '🌀 探索秘境：每日 3 次、1 小时 CD，随机获得灵石 / 修为 / 物品，或受伤。',
+  ].join('\n'))
 
   ctx.command('探索秘境', '秘境探索')
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
 
       // ✅ 互斥检查（只对闭关/悬赏，不影响反向）
-      const cdRows = await ctx.database.get(TABLE.cd, { userId: p.userId })
+      const cdRows = await ctx.database.get(TABLE.cd, { uid: p.uid })
       if (cdRows[0] && cdRows[0].type === 1) return '你正在闭关中，无法探索秘境'
       if (cdRows[0] && cdRows[0].type === 2) return '你正在进行悬赏令，无法探索秘境'
 
@@ -70,7 +70,7 @@ export function registerRiftCommands(ctx: Context) {
       }
 
       // 更新 CD + 次数
-      await ctx.database.set(TABLE.player, { userId: p.userId }, {
+      await ctx.database.set(TABLE.player, { uid: p.uid }, {
         riftCd: now, riftDailyCount: p.riftDailyCount + 1,
       })
 
@@ -90,7 +90,7 @@ export function registerRiftCommands(ctx: Context) {
         if (Math.random() * 100 < dropChance) {
           const drops = rollDrops(ctx, 1)
           if (drops.length > 0) {
-            for (const d of drops) await addItem(ctx, p.userId, d.id, 1)
+            for (const d of drops) await addItem(ctx, p.uid, d.id, 1)
             msg.push(`🎁 额外获得：${formatDrops(drops)}`)
           }
         }
@@ -100,12 +100,12 @@ export function registerRiftCommands(ctx: Context) {
       if (chosen.kind === 'exp') {
         const a = 100 + Math.floor(Math.random() * 500)
         p.exp += a
-        await ctx.database.set(TABLE.player, { userId: p.userId }, { exp: p.exp })
+        await ctx.database.set(TABLE.player, { uid: p.uid }, { exp: p.exp })
         msg.push(`🌀 偶遇灵气漩涡，修为 +${a}`)
         if (Math.random() * 100 < dropChance) {
           const drops = rollDrops(ctx, 1)
           if (drops.length > 0) {
-            for (const d of drops) await addItem(ctx, p.userId, d.id, 1)
+            for (const d of drops) await addItem(ctx, p.uid, d.id, 1)
             msg.push(`🎁 额外获得：${formatDrops(drops)}`)
           }
         }
@@ -113,11 +113,10 @@ export function registerRiftCommands(ctx: Context) {
       }
 
       if (chosen.kind === 'drop') {
-        // 掉落档：直接 1~2 件（原固定生骨丹 → 全局权重池）
         const count = 1 + Math.floor(Math.random() * 2)
         const drops = rollDrops(ctx, count)
         if (drops.length > 0) {
-          for (const d of drops) await addItem(ctx, p.userId, d.id, 1)
+          for (const d of drops) await addItem(ctx, p.uid, d.id, 1)
           msg.push(`🌀 秘境深处发现：${formatDrops(drops)}`)
         } else {
           msg.push('🌀 秘境探索，但一无所获')
@@ -128,7 +127,7 @@ export function registerRiftCommands(ctx: Context) {
       // hurt
       const ratio = 0.15
       p.hp = Math.max(0, p.hp - Math.floor(p.maxhp * ratio))
-      await ctx.database.set(TABLE.player, { userId: p.userId }, { hp: p.hp })
+      await ctx.database.set(TABLE.player, { uid: p.uid }, { hp: p.hp })
       return `🌀 触发陷阱，损失 ${Math.floor(p.maxhp * ratio)} 气血`
     })
 }

@@ -12,6 +12,7 @@ import {
   CombatUnit,
   formatRemainTime,
   formatPct,
+  resolveAtUid,
 } from '../utils'
 
 const POSITION_NAMES = ['散修', '宗主', '长老', '亲传弟子', '内门弟子', '外门弟子']
@@ -109,7 +110,7 @@ export function registerSectCommands(ctx: Context) {
       try {
         await ctx.database.create(TABLE.sect, {
           sectId,
-          sectName: name, sectOwner: p.userId,
+          sectName: name, sectOwnerUid: p.uid,
           sectScale: 0, sectFairyland: 0, sectMaterials: 0, elixirRoomLevel: 0,
           sectUsedStone: 0,
           offeringSnapshot: 0,
@@ -128,7 +129,7 @@ export function registerSectCommands(ctx: Context) {
         return '⚠️ 宗门创建异常，灵石已退还，请稍后重试'
       }
 
-      await ctx.database.set(TABLE.player, { userId: p.userId }, {
+      await ctx.database.set(TABLE.player, { uid: p.uid }, {
         sectId, sectPosition: 1,
       })
       return `⛩️ 宗门「${name}」创建成功（编号 ${sectId}），你是第一任宗主！`
@@ -143,9 +144,10 @@ export function registerSectCommands(ctx: Context) {
       const [sect] = await ctx.database.get(TABLE.sect, { sectId: p.sectId })
       if (!sect) return '宗门不存在（数据异常）'
       const members = await ctx.database.get(TABLE.player, { sectId: p.sectId })
+      const owner = await getPlayer(ctx, sect.sectOwnerUid)
       return [
         `⛩️ ${sect.sectName}（编号 ${sect.sectId}）`,
-        `宗主：${(await getPlayer(ctx, sect.sectOwner))?.userName ?? '未知'}`,
+        `宗主：${owner?.userName ?? '未知'}`,
         `建设度：${sect.sectScale}   可用灵石：${sect.sectUsedStone}   资材：${sect.sectMaterials}`,
         `成员：${members.length}   我的职位：${POSITION_NAMES[p.sectPosition] || '未知错误'}   个人贡献：${p.sectContribution}`,
       ].join('\n')
@@ -171,7 +173,7 @@ export function registerSectCommands(ctx: Context) {
         const rows = await ctx.database.get(TABLE.sect, { sectName: target }); sect = rows[0]
       }
       if (!sect) return '宗门不存在'
-      await ctx.database.set(TABLE.player, { userId: p.userId }, { sectId: sect.sectId, sectPosition: 5 })
+      await ctx.database.set(TABLE.player, { uid: p.uid }, { sectId: sect.sectId, sectPosition: 5 })
       return `✅ 已加入「${sect.sectName}」，成为外门弟子`
     })
 
@@ -192,7 +194,7 @@ export function registerSectCommands(ctx: Context) {
         sectScale: sect.sectScale + actualSpend,
         sectUsedStone: sect.sectUsedStone + actualSpend,
       })
-      await ctx.database.set(TABLE.player, { userId: p.userId }, {
+      await ctx.database.set(TABLE.player, { uid: p.uid }, {
         sectContribution: p.sectContribution + actualSpend / 10,
       })
       return `💎 捐献 ${actualSpend} 灵石，建设度 +${actualSpend}，个人贡献 +${actualSpend / 10}`
@@ -229,18 +231,18 @@ export function registerSectCommands(ctx: Context) {
         return '你不能将其他成员的职位设置得与自己同级或更高'
       }
 
-      const target = (session as any).elements?.find((e: any) => e.type === 'at')?.attrs?.id
-      if (!target) return '请 @ 目标成员'
-      if (target === p.userId) return '不能变更自己的职位，如需传位请使用「宗主传位」'
+      const targetUid = await resolveAtUid(ctx, session)
+      if (targetUid === null) return '请 @ 目标成员（对方需在本平台使用过 bot）'
+      if (targetUid === p.uid) return '不能变更自己的职位，如需传位请使用「宗主传位」'
 
-      const rows = await ctx.database.get(TABLE.player, { userId: target })
+      const rows = await ctx.database.get(TABLE.player, { uid: targetUid })
       if (!rows[0] || rows[0].sectId !== p.sectId) return '该成员不在你的宗门'
 
       if (rows[0].sectPosition <= p.sectPosition) {
         return '你不能变更同级或更高级别成员的职位'
       }
 
-      await ctx.database.set(TABLE.player, { userId: target }, { sectPosition: pos })
+      await ctx.database.set(TABLE.player, { uid: targetUid }, { sectPosition: pos })
       return `✅ 已将 ${rows[0].userName} 调整为「${POSITION_NAMES[pos] || '未知错误'}」`
     })
 
@@ -249,12 +251,12 @@ export function registerSectCommands(ctx: Context) {
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
       if (p.sectPosition !== 1) return '只有宗主可踢人'
-      const target = (session as any).elements?.find((e: any) => e.type === 'at')?.attrs?.id
-      if (!target) return '请 @ 目标成员'
-      if (target === p.userId) return '不能踢自己'
-      const rows = await ctx.database.get(TABLE.player, { userId: target })
+      const targetUid = await resolveAtUid(ctx, session)
+      if (targetUid === null) return '请 @ 目标成员（对方需在本平台使用过 bot）'
+      if (targetUid === p.uid) return '不能踢自己'
+      const rows = await ctx.database.get(TABLE.player, { uid: targetUid })
       if (!rows[0] || rows[0].sectId !== p.sectId) return '目标不在本宗门'
-      await ctx.database.set(TABLE.player, { userId: target }, { sectId: 0, sectPosition: 0 })
+      await ctx.database.set(TABLE.player, { uid: targetUid }, { sectId: 0, sectPosition: 0 })
       return `✅ 已踢出宗门`
     })
 
@@ -263,13 +265,14 @@ export function registerSectCommands(ctx: Context) {
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
       if (p.sectPosition !== 1) return '只有宗主可传位'
-      const target = (session as any).elements?.find((e: any) => e.type === 'at')?.attrs?.id
-      if (!target) return '请 @ 目标成员'
-      const rows = await ctx.database.get(TABLE.player, { userId: target })
+      const targetUid = await resolveAtUid(ctx, session)
+      if (targetUid === null) return '请 @ 目标成员（对方需在本平台使用过 bot）'
+      if (targetUid === p.uid) return '不能传位给自己'
+      const rows = await ctx.database.get(TABLE.player, { uid: targetUid })
       if (!rows[0] || rows[0].sectId !== p.sectId) return '目标不在本宗门'
-      await ctx.database.set(TABLE.sect, { sectId: p.sectId }, { sectOwner: target })
-      await ctx.database.set(TABLE.player, { userId: target }, { sectPosition: 1 })
-      await ctx.database.set(TABLE.player, { userId: p.userId }, { sectPosition: 2 })
+      await ctx.database.set(TABLE.sect, { sectId: p.sectId }, { sectOwnerUid: targetUid })
+      await ctx.database.set(TABLE.player, { uid: targetUid }, { sectPosition: 1 })
+      await ctx.database.set(TABLE.player, { uid: p.uid }, { sectPosition: 2 })
       return `✅ 已将宗主之位传给 ${rows[0].userName}`
     })
 
@@ -280,8 +283,7 @@ export function registerSectCommands(ctx: Context) {
       if (!p.sectId) return '未加入宗门'
       if (p.sectPosition === 1) return '宗主需先传位或解散宗门（暂不支持解散）'
 
-      // ✅ B5：退出时清空进行中的宗门任务（不清 sectMissionDoneAt，保留 CD 语义）
-      await ctx.database.set(TABLE.player, { userId: p.userId }, {
+      await ctx.database.set(TABLE.player, { uid: p.uid }, {
         sectId: 0, sectPosition: 0, sectMissionId: 0,
       })
       return '✅ 已退出宗门'
@@ -293,7 +295,6 @@ export function registerSectCommands(ctx: Context) {
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
       if (!p.sectId) return '未加入宗门'
-      if (p.uid === null) return '灵石服务未同步'
 
       const now = new Date()
       const last = new Date(p.sectOfferingGet)
@@ -307,7 +308,7 @@ export function registerSectCommands(ctx: Context) {
       const snapshot = sect.offeringSnapshot ?? 0
 
       if (snapshot <= 0) {
-        await ctx.database.set(TABLE.player, { userId: p.userId }, { sectOfferingGet: now })
+        await ctx.database.set(TABLE.player, { uid: p.uid }, { sectOfferingGet: now })
         return '🎁 今日宗门灵石不足，供奉无法发放'
       }
 
@@ -317,7 +318,7 @@ export function registerSectCommands(ctx: Context) {
       const amount = Math.floor(snapshot * permille / 1000)
 
       if (amount <= 0) {
-        await ctx.database.set(TABLE.player, { userId: p.userId }, { sectOfferingGet: now })
+        await ctx.database.set(TABLE.player, { uid: p.uid }, { sectOfferingGet: now })
         return '🎁 今日宗门供奉过少，不足 1 灵石'
       }
 
@@ -332,11 +333,11 @@ export function registerSectCommands(ctx: Context) {
 
       let extra = ''
       if (Math.random() < 0.2) {
-        await addItem(ctx, p.userId, 1101, 1)
+        await addItem(ctx, p.uid, 1101, 1)
         extra = '，额外获得「生骨丹」×1'
       }
 
-      await ctx.database.set(TABLE.player, { userId: p.userId }, { sectOfferingGet: now })
+      await ctx.database.set(TABLE.player, { uid: p.uid }, { sectOfferingGet: now })
 
       const posName = ['', '宗主', '长老', '亲传弟子', '内门弟子', '外门弟子'][p.sectPosition] ?? `#${p.sectPosition}`
       return [
@@ -353,14 +354,14 @@ export function registerSectCommands(ctx: Context) {
       if (type === '灵石') {
         const need = 10 * count
         if (p.sectContribution < need) return `需贡献 ${need}`
-        await ctx.database.set(TABLE.player, { userId: p.userId }, { sectContribution: p.sectContribution - need })
+        await ctx.database.set(TABLE.player, { uid: p.uid }, { sectContribution: p.sectContribution - need })
         await addStone(ctx, p.uid, count * 1000)
         return `💎 用 ${need} 贡献兑换 ${count * 1000} 灵石`
       }
       if (type === '修为') {
         const need = 5 * count
         if (p.sectContribution < need) return `需贡献 ${need}`
-        await ctx.database.set(TABLE.player, { userId: p.userId }, { sectContribution: p.sectContribution - need, exp: p.exp + count * 500 })
+        await ctx.database.set(TABLE.player, { uid: p.uid }, { sectContribution: p.sectContribution - need, exp: p.exp + count * 500 })
         return `🌱 用 ${need} 贡献兑换 ${count * 500} 修为`
       }
       if (type === '丹药') {
@@ -400,11 +401,11 @@ export function registerSectCommands(ctx: Context) {
           got[pid] = (got[pid] ?? 0) + 1
         }
 
-        await ctx.database.set(TABLE.player, { userId: p.userId }, {
+        await ctx.database.set(TABLE.player, { uid: p.uid }, {
           sectContribution: p.sectContribution - need,
         })
         for (const [pidStr, num] of Object.entries(got)) {
-          await addItem(ctx, p.userId, Number(pidStr), num)
+          await addItem(ctx, p.uid, Number(pidStr), num)
         }
 
         const detail = Object.entries(got)
@@ -434,7 +435,7 @@ export function registerSectCommands(ctx: Context) {
       if (lvNum >= SECT_MISSION_CONFIG.UNLOCK_REALM_FOR_5STAR) maxStar = 5
 
       const missionId = 1 + Math.floor(Math.random() * maxStar)
-      await ctx.database.set(TABLE.player, { userId: p.userId }, { sectMissionId: missionId })
+      await ctx.database.set(TABLE.player, { uid: p.uid }, { sectMissionId: missionId })
 
       const star = SECT_MISSION_CONFIG.STAR_NAMES[missionId] || `${missionId}星`
       return `📜 已接取【${star}】宗门任务，发送「完成宗门任务」挑战妖兽`
@@ -447,7 +448,7 @@ export function registerSectCommands(ctx: Context) {
       if (typeof prep === 'string') return prep
       const { player: p, stats: st, unit: me } = prep
       if (!p.sectId) {
-        await ctx.database.set(TABLE.player, { userId: p.userId }, { sectMissionId: 0 })
+        await ctx.database.set(TABLE.player, { uid: p.uid }, { sectMissionId: 0 })
         return '未加入宗门'
       }
       if (!p.sectMissionId) return '当前无任务'
@@ -458,7 +459,7 @@ export function registerSectCommands(ctx: Context) {
 
       const r = simulateBattle(me, boss)
 
-      recordBattle(p.userId, {
+      recordBattle(p.uid, {
         ts: Date.now(),
         title: `宗门任务「${boss.name}」`,
         log: r.log,
@@ -476,7 +477,7 @@ export function registerSectCommands(ctx: Context) {
 
         await settleSectDaily(ctx, p.sectId)
 
-        await ctx.database.set(TABLE.player, { userId: p.userId }, {
+        await ctx.database.set(TABLE.player, { uid: p.uid }, {
           sectMissionId: 0,
           sectContribution: p.sectContribution + cfg.rewardContrib,
           sectMissionDoneAt: now,
@@ -499,7 +500,7 @@ export function registerSectCommands(ctx: Context) {
 
       p.hp = me.hp
       p.mp = me.mp
-      await ctx.database.set(TABLE.player, { userId: p.userId }, {
+      await ctx.database.set(TABLE.player, { uid: p.uid }, {
         sectMissionId: 0,
         sectMissionDoneAt: now,
       })

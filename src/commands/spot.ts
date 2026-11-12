@@ -11,7 +11,7 @@ const PLOT_COST = (idx: number) => 1_000_000 * Math.pow(2, idx - 2)
 const SPOT_LEVEL_COST = (lv: number) => 500_000 * Math.pow(2, lv)
 
 export function registerSpotCommands(ctx: Context) {
-  ctx.command('洞府帮助', '洞天指令').action(() =>[
+  ctx.command('洞府帮助', '洞天指令').action(() => [
     '开辟洞府 [名称]   灵气升级   开垦灵田',
     '灵田种植 [药材]   灵田收获 [编号]   查看灵田',
     '洞府信息   洞府改名 <名称>'
@@ -24,13 +24,13 @@ export function registerSpotCommands(ctx: Context) {
       const need = 1_000_000
       if (!(await costStone(ctx, p.uid, need))) return `开辟洞府需 ${need} 灵石`
       const spotName = name || `${p.userName}的洞府`
-      await ctx.database.set(TABLE.player, { userId: p.userId }, {
+      await ctx.database.set(TABLE.player, { uid: p.uid }, {
         blessedSpotFlag: 1, blessedSpotName: spotName, plotCount: 1,
       })
       // 创建第 1 块灵田
       await ctx.database.upsert(TABLE.plot, [{
-        userId: p.userId, plotIndex: 1, plantId: 0, plantAt: new Date(0), plantMinutes: 0,
-      }], ['userId', 'plotIndex'])
+        uid: p.uid, plotIndex: 1, plantId: 0, plantAt: new Date(0), plantMinutes: 0,
+      }], ['uid', 'plotIndex'])
       return `🏞️ 洞府「${spotName}」开辟成功，赠送灵田 ×1`
     })
 
@@ -38,11 +38,11 @@ export function registerSpotCommands(ctx: Context) {
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
       if (!p.blessedSpotFlag) return '尚未开辟洞府'
-      const buff = await getBuff(ctx, p.userId)
+      const buff = await getBuff(ctx, p.uid)
       if (buff.blessedSpot >= 5) return '灵气已达 5 级'
       const cost = SPOT_LEVEL_COST(buff.blessedSpot + 1)
       if (!(await costStone(ctx, p.uid, cost))) return `需 ${cost} 灵石`
-      await ctx.database.set(TABLE.buff, { userId: p.userId }, { blessedSpot: buff.blessedSpot + 1 })
+      await ctx.database.set(TABLE.buff, { uid: p.uid }, { blessedSpot: buff.blessedSpot + 1 })
       return `🏞️ 灵气升级至 ${buff.blessedSpot + 1} 级（闭关修为 +${(buff.blessedSpot + 1) * 5}%，灵田产量 +${(buff.blessedSpot + 1) * 50}%）`
     })
 
@@ -54,10 +54,10 @@ export function registerSpotCommands(ctx: Context) {
       const cost = PLOT_COST(p.plotCount + 1)
       if (!(await costStone(ctx, p.uid, cost))) return `需 ${cost} 灵石`
       const nextIdx = p.plotCount + 1
-      await ctx.database.set(TABLE.player, { userId: p.userId }, { plotCount: nextIdx })
+      await ctx.database.set(TABLE.player, { uid: p.uid }, { plotCount: nextIdx })
       await ctx.database.upsert(TABLE.plot, [{
-        userId: p.userId, plotIndex: nextIdx, plantId: 0, plantAt: new Date(0), plantMinutes: 0,
-      }], ['userId', 'plotIndex'])
+        uid: p.uid, plotIndex: nextIdx, plantId: 0, plantAt: new Date(0), plantMinutes: 0,
+      }], ['uid', 'plotIndex'])
       return `🌾 灵田扩建成功，当前 ${nextIdx} 块`
     })
 
@@ -70,7 +70,7 @@ export function registerSpotCommands(ctx: Context) {
       const { data: _d } = await import('../data')
 
       if (!herb) {
-        const items = await ctx.database.get(TABLE.back, { userId: p.userId })
+        const items = await ctx.database.get(TABLE.back, { uid: p.uid })
         const herbs = items.filter(i => !!_d.herbs[String(i.goodsId)])
         if (!herbs.length) return '背包里没有可种植的药材'
 
@@ -94,15 +94,15 @@ export function registerSpotCommands(ctx: Context) {
       const entry = Object.entries(_d.herbs).find(([, v]: any) => v.name === herb)
       if (!entry) return '未找到该药材'
       const [herbId, herbData]: any = entry
-      const plots = await ctx.database.get(TABLE.plot, { userId: p.userId, plantId: 0 })
+      const plots = await ctx.database.get(TABLE.plot, { uid: p.uid, plantId: 0 })
       if (!plots.length) return '没有空闲灵田'
-      if (!(await removeItem(ctx, p.userId, Number(herbId), 1))) return '背包中没有该药材'
+      if (!(await removeItem(ctx, p.uid, Number(herbId), 1))) return '背包中没有该药材'
 
-      const qiBonus = await getQiFlagBonus(ctx, p.userId)
+      const qiBonus = await getQiFlagBonus(ctx, p.uid)
       const baseMinutes = herbData.tier * 30
       const minutes = Math.max(1, Math.floor(baseMinutes * qiBonus.herbTimeMul))
 
-      await ctx.database.set(TABLE.plot, { userId: p.userId, plotIndex: plots[0].plotIndex }, {
+      await ctx.database.set(TABLE.plot, { uid: p.uid, plotIndex: plots[0].plotIndex }, {
         plantId: Number(herbId), plantAt: new Date(), plantMinutes: minutes,
       })
       const flagNote = qiBonus.herbTimeMul < 1
@@ -113,33 +113,33 @@ export function registerSpotCommands(ctx: Context) {
 
   // ================= 灵田收获 =================
   // ✅ 内存锁：防止玩家并发连点导致同一块地被重复收获
-  const harvestLock = new Set<string>()
+  const harvestLock = new Set<number>()
 
   ctx.command('灵田收获 [no:number]', '收获').alias('洞府收获')
     .action(async ({ session }, no) => {
       const p = await requirePlayer(ctx, session)
 
       // ✅ 检查并上锁
-      if (harvestLock.has(p.userId)) return '⏳ 正在收获中，请勿频繁操作'
-      harvestLock.add(p.userId)
+      if (harvestLock.has(p.uid)) return '⏳ 正在收获中，请勿频繁操作'
+      harvestLock.add(p.uid)
 
       try {
         const rows = no
-          ? await ctx.database.get(TABLE.plot, { userId: p.userId, plotIndex: no })
-          : await ctx.database.get(TABLE.plot, { userId: p.userId })
+          ? await ctx.database.get(TABLE.plot, { uid: p.uid, plotIndex: no })
+          : await ctx.database.get(TABLE.plot, { uid: p.uid })
         const mature = rows.filter(r => r.plantId > 0 && Date.now() - +new Date(r.plantAt) >= r.plantMinutes * 60000)
 
         if (!mature.length) return '没有成熟灵田'
 
-        const buff = await getBuff(ctx, p.userId)
+        const buff = await getBuff(ctx, p.uid)
         // 每级增加 50%（0.5倍）产量
         const bonus = 1 + buff.blessedSpot * 0.5
         let total = 0
         for (const m of mature) {
           // 先计算总量，最后四舍五入
           const qty = Math.round((1 + Math.random() * 2) * bonus)
-          await addItem(ctx, p.userId, m.plantId, qty)
-          await ctx.database.set(TABLE.plot, { userId: p.userId, plotIndex: m.plotIndex }, {
+          await addItem(ctx, p.uid, m.plantId, qty)
+          await ctx.database.set(TABLE.plot, { uid: p.uid, plotIndex: m.plotIndex }, {
             plantId: 0, plantAt: new Date(0), plantMinutes: 0,
           })
           total += qty
@@ -147,14 +147,14 @@ export function registerSpotCommands(ctx: Context) {
         return `🌾 收获 ${mature.length} 块灵田，共获得 ${total} 份药材`
       } finally {
         // ✅ 无论成功还是失败，必须解锁
-        harvestLock.delete(p.userId)
+        harvestLock.delete(p.uid)
       }
     })
 
   ctx.command('查看灵田', '查看灵田')
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
-      const rows = await ctx.database.get(TABLE.plot, { userId: p.userId })
+      const rows = await ctx.database.get(TABLE.plot, { uid: p.uid })
       if (!rows.length) return '尚未开垦灵田'
       const { data: _d } = await import('../data')
       return rows.map(r => {
@@ -169,9 +169,9 @@ export function registerSpotCommands(ctx: Context) {
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
       if (!p.blessedSpotFlag) return '尚未开辟洞府'
-      const buff = await getBuff(ctx, p.userId)
-      const plots = await ctx.database.get(TABLE.plot, { userId: p.userId })
-      const qiBonus = await getQiFlagBonus(ctx, p.userId)
+      const buff = await getBuff(ctx, p.uid)
+      const plots = await ctx.database.get(TABLE.plot, { uid: p.uid })
+      const qiBonus = await getQiFlagBonus(ctx, p.uid)
       const flagLine = qiBonus.name
         ? `聚灵旗：${qiBonus.name}（修为 ×${qiBonus.cultivateMul.toFixed(2)} / 灵田 ×${qiBonus.herbTimeMul.toFixed(2)}）`
         : '聚灵旗：无'
@@ -190,7 +190,7 @@ export function registerSpotCommands(ctx: Context) {
       const p = await requirePlayer(ctx, session)
       if (!p.blessedSpotFlag) return '尚未开辟洞府'
       if (!(await costStone(ctx, p.uid, 10000))) return '需 10000 灵石'
-      await ctx.database.set(TABLE.player, { userId: p.userId }, { blessedSpotName: name })
+      await ctx.database.set(TABLE.player, { uid: p.uid }, { blessedSpotName: name })
       return `🏞️ 洞府已改名为「${name}」`
     })
 }

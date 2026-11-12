@@ -8,28 +8,22 @@ import {
   recordBattle,
   CombatUnit,
   formatPct,
-  getItemNameById,   // ← 新增
+  getItemNameById,
 } from '../utils'
 
 // ======================= 世界 BOSS 数值配置 =======================
-// 所有世界 BOSS 的数值集中在此，一处调优全局生效；命令逻辑只负责调度。
-// ⚠️ 若境界屬性.json 的 def 已改为「减伤%」，MAX_DEF_CAP 保持 85 即可；
-//    若 def 仍是「数值防御」，请把 MAX_DEF_CAP 改成 Infinity（避免 BOSS 防御被压成 85）。
 const WORLD_BOSS_CONFIG = {
-  MIN_LEVEL: 23,          // 保底生成的最低境界
+  MIN_LEVEL: 23,
   NAMES: ['远古魔龙', '混沌魔猿', '幽冥鬼帝', '天罡巨蟒', '万象魔象'],
 
-  // 属性倍率（相对于境界基础）
-  HP_MULT: 100,           // 气血 = 境界基础 × 
-  ATK_MULT: 50,          // 攻击 = 境界基础 × 
-  MAX_DEF_CAP: 85,        // 减伤% 上限
+  HP_MULT: 100,
+  ATK_MULT: 50,
+  MAX_DEF_CAP: 85,
   SPD: 0,
-  // 暴击属性
   CRIT: 0.05,
   CRIT_DMG: 1.5,
   PEN: 0,
 
-  // 击杀奖励（每人）
   KILL_EXP: 500,
   KILL_STONE: 1000,
   KILL_DROP_ID: 1101,
@@ -47,12 +41,10 @@ function rollWorldBossLevel(topPlayerLevelId: string): number {
 
 /**
  * 依世界 BOSS 配置构建战斗单位。
- * 每次战斗都用它重建（DB 只存进度），因此改配置后所有活跃 BOSS 立即生效。
  */
 export function buildWorldBossUnit(name: string, levelId: string): CombatUnit {
   const lv = getLevel(levelId) ?? getLevel('1')!
   const hp = Math.floor(lv.hp * WORLD_BOSS_CONFIG.HP_MULT)
-  // ✅ 世界 BOSS 防御不再获得加成，直接用境界基础减伤%
   const def = Math.min(WORLD_BOSS_CONFIG.MAX_DEF_CAP, lv.def)
   return {
     name,
@@ -60,7 +52,7 @@ export function buildWorldBossUnit(name: string, levelId: string): CombatUnit {
     mp: lv.mp, maxmp: lv.mp,
     atk: Math.floor(lv.atk * WORLD_BOSS_CONFIG.ATK_MULT),
     def,
-    spd: WORLD_BOSS_CONFIG.SPD, 
+    spd: WORLD_BOSS_CONFIG.SPD,
     crit: WORLD_BOSS_CONFIG.CRIT,
     critDmg: WORLD_BOSS_CONFIG.CRIT_DMG,
     pen: WORLD_BOSS_CONFIG.PEN,
@@ -113,7 +105,6 @@ export function registerBossCommands(ctx: Context) {
       if (!boss) return '编号不存在'
       if (boss.hp <= 0) return '该 BOSS 已被击杀'
 
-      // ✅ 用世界 BOSS 配置重建战斗单位（DB 内的 hp/atk 覆盖为最新进度）
       const bossUnit = buildWorldBossUnit(boss.name, String(boss.level))
       bossUnit.hp = boss.hp
       bossUnit.maxhp = boss.maxHp
@@ -121,15 +112,15 @@ export function registerBossCommands(ctx: Context) {
       const result = simulateBattle(me, bossUnit)
       const myDmg = Math.floor(boss.hp - bossUnit.hp)
 
-      const exist = await ctx.database.get(TABLE.bossP, { bossId: boss.id, userId: p.userId })
+      const exist = await ctx.database.get(TABLE.bossP, { bossId: boss.id, uid: p.uid })
       const oldDmg = exist[0]?.damage ?? 0
       if (exist[0]) {
-        await ctx.database.set(TABLE.bossP, { bossId: boss.id, userId: p.userId }, {
+        await ctx.database.set(TABLE.bossP, { bossId: boss.id, uid: p.uid }, {
           damage: oldDmg + myDmg,
         })
       } else {
         await ctx.database.create(TABLE.bossP, {
-          bossId: boss.id, userId: p.userId, platform: session.platform, damage: myDmg,
+          bossId: boss.id, uid: p.uid, platform: session.platform, damage: myDmg,
         })
       }
 
@@ -138,7 +129,7 @@ export function registerBossCommands(ctx: Context) {
       p.mp = me.mp
       await refreshPlayerStats(ctx, p)
 
-      recordBattle(p.userId, {
+      recordBattle(p.uid, {
         ts: Date.now(),
         title: `讨伐世界 BOSS「${boss.name}」`,
         log: result.log,
@@ -151,10 +142,10 @@ export function registerBossCommands(ctx: Context) {
         const parts = await ctx.database.get(TABLE.bossP, { bossId: boss.id })
         const rewards: string[] = []
         for (const pt of parts) {
-          const pl = (await ctx.database.get(TABLE.player, { userId: pt.userId }))[0]
+          const pl = (await ctx.database.get(TABLE.player, { uid: pt.uid }))[0]
           if (!pl) continue
           pl.exp += WORLD_BOSS_CONFIG.KILL_EXP
-          await ctx.database.set(TABLE.player, { userId: pl.userId }, { exp: pl.exp })
+          await ctx.database.set(TABLE.player, { uid: pl.uid }, { exp: pl.exp })
           await addStone(ctx, pl.uid, WORLD_BOSS_CONFIG.KILL_STONE)
           rewards.push(`${pl.userName}（累计伤害 ${Math.floor(pt.damage)}）`)
         }
@@ -166,7 +157,7 @@ export function registerBossCommands(ctx: Context) {
           const dropCount = WORLD_BOSS_CONFIG.KILL_DROP_MIN + Math.floor(Math.random() * dropRange)
           const dropName = getItemNameById(WORLD_BOSS_CONFIG.KILL_DROP_ID)
           try {
-            await addItem(ctx, p.userId, WORLD_BOSS_CONFIG.KILL_DROP_ID, dropCount)
+            await addItem(ctx, p.uid, WORLD_BOSS_CONFIG.KILL_DROP_ID, dropCount)
             lastHitLine = `\n🎯 最后一击：${me.name} 获得「${dropName}」×${dropCount}`
           } catch (e: any) {
             ctx.logger('xiuxian').warn(`最后一击奖励发放失败: ${e?.message ?? e}`)

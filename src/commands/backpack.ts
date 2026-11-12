@@ -102,21 +102,19 @@ export function findItemByName(name: string): [string, any] | null {
 // ===== 装备写入的统一入口 =====
 /**
  * 只更新 buff 表里指定的单个槽位字段，绝不触及背包（back 表）。
- * 旧实现里的 `database.set(TABLE.back, ..., { state: 1 })` 会触发整行覆盖，
- * 导致 goodsNum 被写成 NULL，物品从背包"消失"，这是必须删掉的。
+ * 完整字段写回：即使 adapter 是"整行替换"也不会丢其它字段。
  */
 async function equipSlot(
   ctx: Context,
-  userId: string,
+  uid: number,
   slot: 'faqiBuff' | 'armorBuff' | 'furnaceBuff' | 'qiFlagBuff',
   goodsId: number,
 ) {
-  const buff = await getBuff(ctx, userId)
+  const buff = await getBuff(ctx, uid)
   if ((buff as any)[slot] === goodsId) return
 
-  // 完整字段写回：即使 adapter 是"整行替换"也不会丢其它字段
   await ctx.database.upsert(TABLE.buff, [{
-    userId,
+    uid,
     mainBuff: buff.mainBuff ?? 0,
     secBuff: buff.secBuff ?? 0,
     subBuff: buff.subBuff ?? 0,
@@ -127,7 +125,7 @@ async function equipSlot(
     furnaceBuff: buff.furnaceBuff ?? 0,
     qiFlagBuff: buff.qiFlagBuff ?? 0,
     [slot]: goodsId,
-  }], ['userId'])
+  }], ['uid'])
 }
 
 export function registerBackpackCommands(ctx: Context) {
@@ -136,11 +134,11 @@ export function registerBackpackCommands(ctx: Context) {
     .alias('我的物品').alias('修仙物品').alias('查看背包')
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
-      const items = await ctx.database.get(TABLE.back, { userId: p.userId })
+      const items = await ctx.database.get(TABLE.back, { uid: p.uid })
       const visible = items.filter(it => (it.goodsNum ?? 0) > 0)
       if (!visible.length) return '背包空空如也'
 
-      const buff = await getBuff(ctx, p.userId)
+      const buff = await getBuff(ctx, p.uid)
       const equippedIds = new Set(
         [buff.faqiBuff, buff.armorBuff, buff.furnaceBuff, buff.qiFlagBuff]
           .filter(id => !!id),
@@ -153,7 +151,7 @@ export function registerBackpackCommands(ctx: Context) {
         const mark = equippedIds.has(it.goodsId) ? ' [已装备]' : ''
         const quality = getQualityLabel(it.goodsId)
         const qualityStr = quality ? `[${quality}] ` : ''
-        const tag = (meta as any)?.tag                    // ← 直接读 JSON 字段
+        const tag = (meta as any)?.tag
         const tagStr = tag ? `【${tag}】` : ''
         return `· ${qualityStr}${tagStr}${name} ×${it.goodsNum}${mark}`
       })
@@ -165,7 +163,7 @@ export function registerBackpackCommands(ctx: Context) {
     .action(async ({ session }, slot) => {
       if (!slot) return '请输入槽位：武器 / 防具 / 炼丹炉 / 聚灵旗'
       const p = await requirePlayer(ctx, session)
-      const buff = await getBuff(ctx, p.userId)
+      const buff = await getBuff(ctx, p.uid)
 
       const map: Record<string, { key: 'faqiBuff' | 'armorBuff' | 'furnaceBuff' | 'qiFlagBuff'; label: string }> = {
         '武器': { key: 'faqiBuff', label: '武器' },
@@ -181,7 +179,7 @@ export function registerBackpackCommands(ctx: Context) {
       const curId = buff[target.key]
       if (!curId) return `你当前没有装备${target.label}`
 
-      await ctx.database.set(TABLE.buff, { userId: p.userId }, { [target.key]: 0 } as any)
+      await ctx.database.set(TABLE.buff, { uid: p.uid }, { [target.key]: 0 } as any)
       await refreshPlayerStats(ctx, p)
 
       const all = ALL_ITEM_TABLES()
@@ -194,11 +192,11 @@ export function registerBackpackCommands(ctx: Context) {
     .action(async ({ session }, name, count = 1) => {
       if (!name) return '请输入要使用的物品名称'
       const p = await requirePlayer(ctx, session)
-      const found = await findItemInBackpack(ctx, p.userId, name)
+      const found = await findItemInBackpack(ctx, p.uid, name)
       if (!found) return `背包中未找到「${name}」`
       const [idStr, meta] = found
       const goodsId = parseInt(idStr, 10)
-      const rows = await ctx.database.get(TABLE.back, { userId: p.userId, goodsId })
+      const rows = await ctx.database.get(TABLE.back, { uid: p.uid, goodsId })
       if (!rows[0] || rows[0].goodsNum < count) return `物品数量不足`
       const backRow = rows[0]
 
@@ -206,13 +204,13 @@ export function registerBackpackCommands(ctx: Context) {
       if (meta._type === 'gongfa' || meta._type === 'fuxiu' || meta._type === 'shentong') {
         const typeName = meta._type === 'gongfa' ? '功法'
           : meta._type === 'fuxiu' ? '辅修功法' : '神通'
-        const learned = await getLearnedSkills(ctx, p.userId)
+        const learned = await getLearnedSkills(ctx, p.uid)
         const learnedArr = meta._type === 'gongfa' ? learned.gongfa
           : meta._type === 'fuxiu' ? learned.fuxiu : learned.shentong
         if (learnedArr.includes(goodsId)) return `已学会「${meta.name}」，无需重复学习`
 
-        await ctx.database.upsert(TABLE.skill, [{ userId: p.userId, skillId: goodsId }], ['userId', 'skillId'])
-        await removeItem(ctx, p.userId, goodsId, count)
+        await ctx.database.upsert(TABLE.skill, [{ uid: p.uid, skillId: goodsId }], ['uid', 'skillId'])
+        await removeItem(ctx, p.uid, goodsId, count)
         await refreshPlayerStats(ctx, p)
         return `📖 成功学习${typeName}「${meta.name}」！`
       }
@@ -223,15 +221,14 @@ export function registerBackpackCommands(ctx: Context) {
         if (isDue) return '「渡厄丹」需在「渡厄突破」时自动使用，请直接发送「渡厄突破」'
 
         if (isOneShotBreakthroughPill(meta)) {
-          if (await isOneShotPillUsed(ctx, p.userId, goodsId)) {
+          if (await isOneShotPillUsed(ctx, p.uid, goodsId)) {
             return `「${meta.name}」整局限服一次，你已服用过`
           }
           if (meta.realm && parseInt(p.level, 10) < Number(meta.realm)) {
             return `境界不足，需达到「${data.levels[String(meta.realm)]?.name}」才可服用「${meta.name}」`
           }
 
-          // ✅ 修改：目标境界与提示文本，以丹药设定的 realm + 1 为准（与大突破丹原本设计一致）
-          // 如果丹药没有配置 realm（保险起见），则回退到当前境界 + 1
+          // ✅ 目标境界与提示文本，以丹药设定的 realm + 1 为准
           const targetLevelId = meta.realm
             ? String(Number(meta.realm) + 1)
             : String(parseInt(p.level, 10) + 1)
@@ -240,10 +237,10 @@ export function registerBackpackCommands(ctx: Context) {
           if (!targetLv) return '当前已是最高境界，无需服用突破丹'
 
           await ctx.database.upsert(TABLE.pillUsed, [{
-            userId: p.userId, pillId: goodsId,
+            uid: p.uid, pillId: goodsId,
             targetLevelId, usedAt: new Date(),
-          }], ['userId', 'pillId'])
-          await removeItem(ctx, p.userId, goodsId, 1)
+          }], ['uid', 'pillId'])
+          await removeItem(ctx, p.uid, goodsId, 1)
 
           const btValue = getOneShotBreakthroughValue(meta)
           return `💊 服用「${meta.name}」，突破「${targetLv.name}」时成功率 +${btValue}%（成功突破此境界前一直有效，飞升后重置）`
@@ -276,9 +273,9 @@ export function registerBackpackCommands(ctx: Context) {
             } else if (m.stat === 'mp') {
               p.mp = Math.min(p.maxmp, p.mp + Math.floor(p.maxmp * (m.value ?? 0)))
             } else if (m.stat === 'atk' && m.mode === 'flat') {
-              const buffNow = await getBuff(ctx, p.userId)
+              const buffNow = await getBuff(ctx, p.uid)
               const newBuff = {
-                userId: p.userId,
+                uid: p.uid,
                 mainBuff: buffNow.mainBuff ?? 0,
                 secBuff: buffNow.secBuff ?? 0,
                 subBuff: buffNow.subBuff ?? 0,
@@ -289,20 +286,20 @@ export function registerBackpackCommands(ctx: Context) {
                 furnaceBuff: buffNow.furnaceBuff ?? 0,
                 qiFlagBuff: buffNow.qiFlagBuff ?? 0,
               }
-              await ctx.database.upsert(TABLE.buff, [newBuff], ['userId'])
+              await ctx.database.upsert(TABLE.buff, [newBuff], ['uid'])
             }
           }
         }
 
         const hasLimits = dailyLimit !== undefined || totalLimit !== undefined
-        await removeItem(ctx, p.userId, goodsId, actualCount, hasLimits)
+        await removeItem(ctx, p.uid, goodsId, actualCount, hasLimits)
         if (hasLimits) {
-          await ctx.database.set(TABLE.back, { userId: p.userId, goodsId }, {
+          await ctx.database.set(TABLE.back, { uid: p.uid, goodsId }, {
             dayNum: backRow.dayNum + actualCount,
             allNum: backRow.allNum + actualCount,
           })
         }
-        await ctx.database.set(TABLE.player, { userId: p.userId }, {
+        await ctx.database.set(TABLE.player, { uid: p.uid }, {
           exp: p.exp, hp: p.hp, mp: p.mp, levelUpRate: p.levelUpRate,
         })
         await refreshPlayerStats(ctx, p)
@@ -321,14 +318,14 @@ export function registerBackpackCommands(ctx: Context) {
       // ===== 武器 / 防具 =====
       if (meta._type === 'weapon' || meta._type === 'armor') {
         const slot = meta._type === 'weapon' ? 'faqiBuff' : 'armorBuff'
-        await equipSlot(ctx, p.userId, slot, goodsId)
+        await equipSlot(ctx, p.uid, slot, goodsId)
         await refreshPlayerStats(ctx, p)
         return `⚔️ 已装备「${meta.name}」`
       }
 
       // ===== 聚灵旗 =====
       if (meta._type === 'qiflag') {
-        await equipSlot(ctx, p.userId, 'qiFlagBuff', goodsId)
+        await equipSlot(ctx, p.uid, 'qiFlagBuff', goodsId)
         const cultPct = ((meta.cultivateSpeed ?? 0) * 10).toFixed(0)
         const herbPct = ((meta.herbSpeed ?? 0) * 20).toFixed(0)
         return `🚩 已装备聚灵旗「${meta.name}」（闭关修为 +${cultPct}% / 灵田增速 +${herbPct}%）`
@@ -336,7 +333,7 @@ export function registerBackpackCommands(ctx: Context) {
 
       // ===== 炼丹炉 =====
       if (meta._type === 'furnace' || (meta as any).bonusQuantity !== undefined) {
-        await equipSlot(ctx, p.userId, 'furnaceBuff', goodsId)
+        await equipSlot(ctx, p.uid, 'furnaceBuff', goodsId)
         return `⚗️ 已装备炼丹炉「${meta.name}」（多产 ${meta.bonusQuantity ?? 0} 枚 / 成功率 +${((meta.bonusSuccess ?? 0) * 100).toFixed(0)}%）`
       }
 
@@ -347,7 +344,7 @@ export function registerBackpackCommands(ctx: Context) {
   ctx.command('我的功法', '查看已学功法/辅修')
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
-      const learned = await getLearnedSkills(ctx, p.userId)
+      const learned = await getLearnedSkills(ctx, p.uid)
 
       // 格式化功法的加成描述
       const formatMods = (mods: any[]) => {
@@ -388,7 +385,7 @@ export function registerBackpackCommands(ctx: Context) {
   ctx.command('我的神通', '查看已学神通')
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
-      const learned = await getLearnedSkills(ctx, p.userId)
+      const learned = await getLearnedSkills(ctx, p.uid)
       if (!learned.shentong.length) return '尚未学习任何神通'
       const lines = learned.shentong.map(id => {
         const st = data.shentong[String(id)]

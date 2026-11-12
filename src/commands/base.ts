@@ -4,45 +4,43 @@ import { TABLE, Player, } from '../models'
 
 import {
   getPlayer, requirePlayer, computeStats,
-  getStone, addStone,
+  getStone, addStone, costStone,
   getBuff, getLearnedSkills, checkBreakthrough, computeOneShotBreakthroughBonus,
   statLabel,
   getBattleRecord,
   truncateDecimal,
   formatPct,
   getAffectedRows,
+  getSessionUid,
 } from '../utils'
 
 export function registerBaseCommands(ctx: Context) {
   // ---------- 建号 ----------
   ctx.command('我要修仙', '踏上仙途')
     .action(async ({ session }) => {
-      const userId = session.userId!
-      const exist = await getPlayer(ctx, userId)
+      const uid = await getSessionUid(ctx, session)
+      if (uid === null) {
+        return '⚠️ 账号未同步，请稍后重试或联系管理员'
+      }
+      const exist = await getPlayer(ctx, uid)
       if (exist) return '你已入仙途，无需重复。发送「我的修仙信息」查看。'
-      let uid: number | null = (session as any).user?.id ?? null
-      if (uid === null) {
-        const user = await ctx.database.getUser(session.platform as any, userId)
-        if (user && typeof user.id === 'number') uid = user.id
-      }
-      if (uid === null) {
-        ctx.logger('xiuxian').warn(`玩家 ${userId} 建号时 uid 获取失败，将在首次操作时重试`)
-      }
+
       const [rootId, root] = rollRoot()
       const initialLevel = '1'
       const lv = getLevel(initialLevel)!
 
+      const userName = session.username || `无名散修${String(uid).slice(-3)}`
+
       const player: Player = {
-        userId,
-        platform: session.platform,
         uid,
+        platform: session.platform,
         root: rootId,
         level: initialLevel,
         exercisesLevel: '20001',
         power: lv.power,
         isSign: new Date(0),
         exp: 0,
-        userName: session.username || `无名散修${userId.slice(-3)}`,
+        userName,
         levelUpCd: new Date(0),
         levelUpRate: 0,
         hp: lv.hp, maxhp: lv.hp,
@@ -69,14 +67,13 @@ export function registerBaseCommands(ctx: Context) {
       ].join('\n')
     })
 
-  // ---------- 签到（B6：条件更新做原子占位） ----------
+  // ---------- 签到（原子占位） ----------
   ctx.command('修仙签到', '每日签到领取灵石')
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
       const now = new Date()
       const last = new Date(p.isSign)
       if (last.toDateString() === now.toDateString()) return '今日已签到，明日再来。'
-      if (p.uid === null) return '⚠️ 灵石服务未同步，请稍后重试或联系管理员'
 
       const min = (ctx as any).config?.signMin ?? 1000
       const max = (ctx as any).config?.signMax ?? 2000
@@ -86,12 +83,11 @@ export function registerBaseCommands(ctx: Context) {
       const todayStart = new Date(now)
       todayStart.setHours(0, 0, 0, 0)
       const writeRes: any = await ctx.database.set(TABLE.player, {
-        userId: p.userId,
+        uid: p.uid,
         isSign: { $lt: todayStart },
       }, { isSign: now })
 
       const affected = getAffectedRows(writeRes)
-      // ✅ 只有明确「修改 0 行」才拒绝；-1（adapter 不提供行数）按乐观处理
       if (affected === 0) return '今日已签到，明日再来。'
 
       const before = await getStone(ctx, p.uid)
@@ -108,8 +104,8 @@ export function registerBaseCommands(ctx: Context) {
       const stone = await getStone(ctx, p.uid)
 
       const st = await computeStats(ctx, p)
-      const buff = await getBuff(ctx, p.userId)
-      const learned = await getLearnedSkills(ctx, p.userId)
+      const buff = await getBuff(ctx, p.uid)
+      const learned = await getLearnedSkills(ctx, p.uid)
 
       const gongfaStatSums: Record<string, number> = {}
       for (const gid of learned.gongfa) {
@@ -131,7 +127,7 @@ export function registerBaseCommands(ctx: Context) {
       }
 
       const info = checkBreakthrough(p)
-      const oneShot = await computeOneShotBreakthroughBonus(ctx, p.userId, p.level)
+      const oneShot = await computeOneShotBreakthroughBonus(ctx, p.uid, p.level)
       const tempRate = p.levelUpRate || 0
       const baseRate = Math.max(0, info.rate - tempRate)
       const dueRate = oneShot.bonus
@@ -250,7 +246,6 @@ export function registerBaseCommands(ctx: Context) {
   ctx.command('灵石', '查看灵石')
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
-      if (p.uid === null) return '⚠️ 灵石服务未同步，请稍后重试或联系管理员'
       return `💰 你当前拥有灵石 ${await getStone(ctx, p.uid)}。`
     })
 
@@ -258,7 +253,7 @@ export function registerBaseCommands(ctx: Context) {
   ctx.command('查看战斗详情', '查看最近 120 秒内的战斗记录').alias('战斗详情')
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
-      const rec = getBattleRecord(p.userId)
+      const rec = getBattleRecord(p.uid)
       if (!rec) return '⏱️ 最近 120 秒内没有战斗记录（或已过期）'
 
       const winnerName = rec.winner === 'a' ? rec.playerName
@@ -284,13 +279,23 @@ export function registerBaseCommands(ctx: Context) {
     })
 
   // ---------- 改名 ----------
-  ctx.command('修改道号 <name:string>', '修改道号')
+  ctx.command('修改道号 <name:string>', '修改道号（消耗 50000 × 境界ID 灵石）')
     .action(async ({ session }, name) => {
       if (!name) return '请输入新的道号'
       if (Buffer.byteLength(name, 'utf-8') > 30) return '道号过长（最多 30 字节）'
+
       const p = await requirePlayer(ctx, session)
-      await ctx.database.set(TABLE.player, { userId: p.userId }, { userName: name })
-      return `✅ 道号已更改为「${name}」`
+
+      // 灵石消耗 = 50000 × 当前境界ID（境界ID取数值，最低按 1）
+      const lvNum = Math.max(1, parseInt(p.level, 10) || 1)
+      const cost = 50_000 * lvNum
+
+      if (!(await costStone(ctx, p.uid, cost))) {
+        return `💎 灵石不足：修改道号需 ${cost} 灵石（50000 × 境界 ${lvNum}），当前 ${await getStone(ctx, p.uid)}`
+      }
+
+      await ctx.database.set(TABLE.player, { uid: p.uid }, { userName: name })
+      return `✅ 道号已更改为「${name}」（消耗 ${cost} 灵石）`
     })
 
   // ---------- 排行榜 ----------

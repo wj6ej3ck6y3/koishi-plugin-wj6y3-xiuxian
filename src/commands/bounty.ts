@@ -101,8 +101,8 @@ function pickTasksByWeight(
   return picked
 }
 
-async function generateBountyList(ctx: Context, userId: string) {
-  await ctx.database.remove(TABLE.bountyList, { userId })
+async function generateBountyList(ctx: Context, uid: number) {
+  await ctx.database.remove(TABLE.bountyList, { uid })
   const all = buildAllTasks()
   const picked = pickTasksByWeight(all, BOUNTY_SIZE)
   for (let i = 0; i < picked.length; i++) {
@@ -110,7 +110,7 @@ async function generateBountyList(ctx: Context, userId: string) {
     const drops = generateDropsForTask(ctx)
     const successRate = rollSuccessRate()
     await ctx.database.create(TABLE.bountyList, {
-      userId, slot: i + 1, questKey: t.key,
+      uid, slot: i + 1, questKey: t.key,
       dropJson: JSON.stringify(drops),
       successRate,
       createdAt: new Date(),
@@ -118,8 +118,8 @@ async function generateBountyList(ctx: Context, userId: string) {
   }
 }
 
-async function loadBountyList(ctx: Context, userId: string) {
-  const rows = await ctx.database.get(TABLE.bountyList, { userId })
+async function loadBountyList(ctx: Context, uid: number) {
+  const rows = await ctx.database.get(TABLE.bountyList, { uid })
   return rows.sort((a, b) => a.slot - b.slot)
 }
 
@@ -145,10 +145,10 @@ function formatBountyList(rows: any[], level: number): string {
   return lines.join('\n')
 }
 
-async function clearSession(ctx: Context, userId: string) {
-  await ctx.database.remove(TABLE.cd, { userId })
-  await ctx.database.remove(TABLE.quest, { userId })
-  await ctx.database.remove(TABLE.work, { userId })
+async function clearSession(ctx: Context, uid: number) {
+  await ctx.database.remove(TABLE.cd, { uid })
+  await ctx.database.remove(TABLE.quest, { uid })
+  await ctx.database.remove(TABLE.work, { uid })
 }
 
 // ===== 结算结果类型 =====
@@ -161,19 +161,13 @@ interface BountySettleResult {
 
 /**
  * 尝试结算进行中的悬赏令。
- *
- * ✅ B2：并发保护策略
- *   - 确认到期后，立即用 `database.remove(TABLE.cd, { userId, type: 2 })` 抢占
- *   - 删除成功（>0 行）的请求才继续结算发奖
- *   - 其他请求读到 remainMs=1000 稍后重试
- *   - 后续分支只清 quest/work（cd 已在抢占步骤删除），避免误删并发接取的新 cd
  */
 async function trySettleBounty(
   ctx: Context,
   p: any,
   wantStone = false,
 ): Promise<BountySettleResult> {
-  const cdRows = await ctx.database.get(TABLE.cd, { userId: p.userId })
+  const cdRows = await ctx.database.get(TABLE.cd, { uid: p.uid })
   if (cdRows[0]?.type !== 2) return { settled: false, reason: 'no-active' }
 
   const elapsed = (Date.now() - +new Date(cdRows[0].createTime)) / 1000
@@ -182,27 +176,26 @@ async function trySettleBounty(
     return { settled: false, reason: 'not-ready', remainMs }
   }
 
-  // ✅ B2：抢占式删除（只有真正删除成功的那次请求才能继续）
-  const lockRes: any = await ctx.database.remove(TABLE.cd, { userId: p.userId, type: 2 })
+  // ✅ 抢占式删除（只有真正删除成功的那次请求才能继续）
+  const lockRes: any = await ctx.database.remove(TABLE.cd, { uid: p.uid, type: 2 })
   const locked = getAffectedRows(lockRes)
-  // ✅ 只有明确「删除 0 行」才判定被抢；-1（adapter 不提供行数）按乐观处理
   if (locked === 0) {
     return { settled: false, reason: 'not-ready', remainMs: 1000 }
   }
 
   const cleanQuestAndWork = async () => {
-    await ctx.database.remove(TABLE.quest, { userId: p.userId })
-    await ctx.database.remove(TABLE.work, { userId: p.userId })
+    await ctx.database.remove(TABLE.quest, { uid: p.uid })
+    await ctx.database.remove(TABLE.work, { uid: p.uid })
   }
 
-  const qRows = await ctx.database.get(TABLE.quest, { userId: p.userId })
+  const qRows = await ctx.database.get(TABLE.quest, { uid: p.uid })
   const slot = qRows[0]?.questId
   if (!slot) {
     await cleanQuestAndWork()
     return { settled: false, reason: 'error', msg: '任务数据异常' }
   }
 
-  const listRows = await ctx.database.get(TABLE.bountyList, { userId: p.userId, slot })
+  const listRows = await ctx.database.get(TABLE.bountyList, { uid: p.uid, slot })
   if (!listRows[0]) {
     await cleanQuestAndWork()
     return { settled: false, reason: 'error', msg: '任务列表数据异常，请重新发送「悬赏令」' }
@@ -231,22 +224,22 @@ async function trySettleBounty(
       msg = `✅ 「${name}」成功！\n💎 获得灵石 +${stoneReward}`
     } else {
       p.exp += expReward
-      await ctx.database.set(TABLE.player, { userId: p.userId }, { exp: p.exp })
+      await ctx.database.set(TABLE.player, { uid: p.uid }, { exp: p.exp })
       msg = `✅ 「${name}」成功！\n🌱 获得修为 +${expReward}`
     }
     if (drops.length > 0) {
-      for (const d of drops) await addItem(ctx, p.userId, d.id, d.num)
+      for (const d of drops) await addItem(ctx, p.uid, d.id, d.num)
       msg += `\n🎁 额外掉落：${drops.map(d => `${d.name}×${d.num}`).join('、')}`
     }
   } else {
     const expGain = Math.floor(calcExpReward(baseExp, level, successRate) * 0.3)
     p.exp += expGain
-    await ctx.database.set(TABLE.player, { userId: p.userId }, { exp: p.exp })
+    await ctx.database.set(TABLE.player, { uid: p.uid }, { exp: p.exp })
     msg = `❌ 「${name}」失败，仍获得修为 +${expGain}`
   }
 
   await cleanQuestAndWork()
-  await generateBountyList(ctx, p.userId)
+  await generateBountyList(ctx, p.uid)
   return { settled: true, msg }
 }
 
@@ -271,16 +264,16 @@ export function registerBountyCommands(ctx: Context) {
       const settleResult = await trySettleBounty(ctx, p)
       const prefix = settleResult.msg ? settleResult.msg + '\n\n' : ''
 
-      const cdRows = await ctx.database.get(TABLE.cd, { userId: p.userId })
+      const cdRows = await ctx.database.get(TABLE.cd, { uid: p.uid })
 
       if (cdRows[0]?.type === 2) {
-        const qRows = await ctx.database.get(TABLE.quest, { userId: p.userId })
+        const qRows = await ctx.database.get(TABLE.quest, { uid: p.uid })
         const slot = qRows[0]?.questId
         const listRows = slot
-          ? await ctx.database.get(TABLE.bountyList, { userId: p.userId, slot })
+          ? await ctx.database.get(TABLE.bountyList, { uid: p.uid, slot })
           : []
         if (!listRows[0]) {
-          await clearSession(ctx, p.userId)
+          await clearSession(ctx, p.uid)
           return prefix + '数据异常已清理，请重新发送「悬赏令」'
         }
         const [cat, ...rest] = listRows[0].questKey.split(':')
@@ -294,10 +287,10 @@ export function registerBountyCommands(ctx: Context) {
       }
       if (cdRows[0]?.type === 1) return prefix + '你正在闭关中，无法进行悬赏令'
 
-      let list = await loadBountyList(ctx, p.userId)
+      let list = await loadBountyList(ctx, p.uid)
       if (list.length === 0) {
-        await generateBountyList(ctx, p.userId)
-        list = await loadBountyList(ctx, p.userId)
+        await generateBountyList(ctx, p.uid)
+        list = await loadBountyList(ctx, p.uid)
       }
 
       return prefix + '📜 当前悬赏令：\n' + formatBountyList(list, parseInt(p.level, 10) || 1) +
@@ -311,13 +304,13 @@ export function registerBountyCommands(ctx: Context) {
 
       const settleResult = await trySettleBounty(ctx, p)
       if (settleResult.settled) {
-        const list = await loadBountyList(ctx, p.userId)
+        const list = await loadBountyList(ctx, p.uid)
         return (settleResult.msg || '') +
           '\n\n🔄 已自动结算并生成新悬赏令（本次不消耗刷新次数）\n\n' +
           formatBountyList(list, parseInt(p.level, 10) || 1)
       }
 
-      const cdRows = await ctx.database.get(TABLE.cd, { userId: p.userId })
+      const cdRows = await ctx.database.get(TABLE.cd, { uid: p.uid })
       if (cdRows[0]?.type === 2) return '正在进行悬赏令，无法刷新'
       if (cdRows[0]?.type === 1) return '正在闭关中，无法刷新'
 
@@ -332,12 +325,12 @@ export function registerBountyCommands(ctx: Context) {
         if (!(await costStone(ctx, p.uid, 1000))) return '超出免费次数，需 1000 灵石（灵石不足）'
         costNote = '（本次消耗 1000 灵石）'
       }
-      await ctx.database.set(TABLE.player, { userId: p.userId }, {
+      await ctx.database.set(TABLE.player, { uid: p.uid }, {
         workRefreshCount: cnt + 1, workRefreshCountTime: dayTs,
       })
 
-      await generateBountyList(ctx, p.userId)
-      const list = await loadBountyList(ctx, p.userId)
+      await generateBountyList(ctx, p.uid)
+      const list = await loadBountyList(ctx, p.uid)
       const freeRemain = Math.max(0, 3 - Math.min(3, cnt + 1))
       return `🔄 悬赏令已刷新${costNote}（今日免费剩余 ${freeRemain} 次）\n\n${formatBountyList(list, parseInt(p.level, 10) || 1)}`
     })
@@ -347,11 +340,11 @@ export function registerBountyCommands(ctx: Context) {
     .action(async ({ session }, no) => {
       if (!no) return '请输入编号（1~3）'
       const p = await requirePlayer(ctx, session)
-      const cdRows = await ctx.database.get(TABLE.cd, { userId: p.userId })
+      const cdRows = await ctx.database.get(TABLE.cd, { uid: p.uid })
       if (cdRows[0]?.type === 1) return '你正在闭关中，无法接取悬赏'
       if (cdRows[0]?.type === 2) return '你已有进行中的悬赏令'
 
-      const list = await loadBountyList(ctx, p.userId)
+      const list = await loadBountyList(ctx, p.uid)
       const target = list.find(r => r.slot === no)
       if (!target) {
         if (list.length === 0) return '暂无悬赏令，请先发送「悬赏令」生成'
@@ -364,12 +357,12 @@ export function registerBountyCommands(ctx: Context) {
       if (!task) return '任务数据异常'
 
       const sr = target.successRate ?? 75
-      await ctx.database.remove(TABLE.cd, { userId: p.userId })
+      await ctx.database.remove(TABLE.cd, { uid: p.uid })
       await ctx.database.create(TABLE.cd, {
-        userId: p.userId, type: 2,
+        uid: p.uid, type: 2,
         createTime: new Date(), scheduledTime: task.timeSec * 60,
       })
-      await ctx.database.upsert(TABLE.quest, [{ userId: p.userId, questId: no }], ['userId'])
+      await ctx.database.upsert(TABLE.quest, [{ uid: p.uid, questId: no }], ['uid'])
       return `📜 已接取【${no}】${cat}·${name}（成功率 ${sr}%），需等待 ${task.timeSec} 分钟后可结算`
     })
 
@@ -394,11 +387,11 @@ export function registerBountyCommands(ctx: Context) {
   ctx.command('悬赏令终止', '中止任务')
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
-      const cdRows = await ctx.database.get(TABLE.cd, { userId: p.userId })
+      const cdRows = await ctx.database.get(TABLE.cd, { uid: p.uid })
       if (cdRows[0]?.type !== 2) return '当前没有悬赏令'
       await costStone(ctx, p.uid, 500000)
-      await clearSession(ctx, p.userId)
-      await generateBountyList(ctx, p.userId)
+      await clearSession(ctx, p.uid)
+      await generateBountyList(ctx, p.uid)
       return '已终止悬赏令（罚 500000 灵石），已生成下一批悬赏令'
     })
 }

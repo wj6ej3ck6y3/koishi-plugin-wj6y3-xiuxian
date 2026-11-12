@@ -30,10 +30,10 @@ export function registerShopCommands(ctx: Context) {
       if (!rows[0]) return '商品不存在'
       const s = rows[0]
       if (!(await costStone(ctx, p.uid, s.price))) return '灵石不足'
-      await addItem(ctx, p.userId, s.goodsId, s.goodsNum)
-      // 卖家到账
-      if (s.sellerId !== '0') {
-        const seller = await ctx.database.get(TABLE.player, { userId: s.sellerId })
+      await addItem(ctx, p.uid, s.goodsId, s.goodsNum)
+      // 卖家到账（sellerUid=0 表示系统挂单，无到账）
+      if (s.sellerUid !== 0) {
+        const seller = await ctx.database.get(TABLE.player, { uid: s.sellerUid })
         if (seller[0]) await addStone(ctx, seller[0].uid, Math.floor(s.price * 0.95))
       }
       await ctx.database.remove(TABLE.shop, { id: s.id })
@@ -47,19 +47,19 @@ export function registerShopCommands(ctx: Context) {
     .action(async ({ session }, name, price) => {
       if (!name || !price) return '格式：坊市上架 [物品名称] [价格]'
       const p = await requirePlayer(ctx, session)
-      const found = await findItemInBackpack(ctx, p.userId, name)
+      const found = await findItemInBackpack(ctx, p.uid, name)
       if (!found) return '背包中没有该物品'
       const [idStr] = found
       const pNum = Number(price)
       if (!Number.isFinite(pNum) || pNum <= 0) return '价格无效'
       const finalPrice = Math.floor(pNum)
-      if (!(await removeItem(ctx, p.userId, Number(idStr), 1))) return '数量不足'
+      if (!(await removeItem(ctx, p.uid, Number(idStr), 1))) return '数量不足'
 
       // 手动分配 ID
       const id = await getNextId(ctx, TABLE.shop, 'id')
       await ctx.database.create(TABLE.shop, {
         id,
-        sellerId: p.userId, sellerName: p.userName,
+        sellerUid: p.uid, sellerName: p.userName,
         goodsId: Number(idStr), price: finalPrice,
         goodsNum: 1, createTime: new Date(),
       })
@@ -73,8 +73,8 @@ export function registerShopCommands(ctx: Context) {
       const rows = await ctx.database.get(TABLE.shop, { id: Number(no) })
       if (!rows[0]) return '不存在'
       const s = rows[0]
-      if (s.sellerId !== p.userId) return '这不是你的商品，无法下架'
-      await addItem(ctx, p.userId, s.goodsId, s.goodsNum)
+      if (s.sellerUid !== p.uid) return '这不是你的商品，无法下架'
+      await addItem(ctx, p.uid, s.goodsId, s.goodsNum)
       await ctx.database.remove(TABLE.shop, { id: s.id })
       return '✅ 已下架'
     })
@@ -91,7 +91,7 @@ export function registerShopCommands(ctx: Context) {
       const id = await getNextId(ctx, TABLE.shop, 'id')
       await ctx.database.create(TABLE.shop, {
         id,
-        sellerId: '0', sellerName: '系统',
+        sellerUid: 0, sellerName: '系统',
         goodsId: Number(idStr), price: Math.floor(pNum),
         goodsNum: 1, createTime: new Date(),
       })
@@ -104,7 +104,7 @@ export function registerShopCommands(ctx: Context) {
       if (!name) return '请输入要回收的物品名称'
       const p = await requirePlayer(ctx, session)
 
-      const found = await findItemInBackpack(ctx, p.userId, name)
+      const found = await findItemInBackpack(ctx, p.uid, name)
       if (!found) return '背包中没有该物品'
       const [idStr, meta] = found
       const goodsId = parseInt(idStr, 10)
@@ -112,7 +112,7 @@ export function registerShopCommands(ctx: Context) {
       const actualCount = Math.max(1, Math.floor(Number(count) || 1))
 
       // 检查背包数量
-      const rows = await ctx.database.get(TABLE.back, { userId: p.userId, goodsId })
+      const rows = await ctx.database.get(TABLE.back, { uid: p.uid, goodsId })
       const owned = rows[0]?.goodsNum ?? 0
       if (owned < actualCount) {
         return `背包中「${meta.name}」数量不足（持有 ${owned}，需 ${actualCount}）`
@@ -122,7 +122,7 @@ export function registerShopCommands(ctx: Context) {
       const unitPrice = Math.max(1, Math.floor(estimatePrice(goodsId) / 2))
       const totalPrice = unitPrice * actualCount
 
-      if (!(await removeItem(ctx, p.userId, goodsId, actualCount))) {
+      if (!(await removeItem(ctx, p.uid, goodsId, actualCount))) {
         return '回收失败，请稍后重试'
       }
       await addStone(ctx, p.uid, totalPrice)

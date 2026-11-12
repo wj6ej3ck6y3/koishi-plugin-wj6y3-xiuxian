@@ -17,12 +17,12 @@ export function registerCultivateCommands(ctx: Context) {
   ctx.command('闭关', '进入闭关状态')
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
-      const rows = await ctx.database.get(TABLE.cd, { userId: p.userId })
+      const rows = await ctx.database.get(TABLE.cd, { uid: p.uid })
       if (rows[0] && rows[0].type === 1) return '你已在闭关中'
       if (rows[0] && rows[0].type === 2) return '你正在进行悬赏令，无法闭关'
-      if (rows[0]) await ctx.database.remove(TABLE.cd, { userId: p.userId })
+      if (rows[0]) await ctx.database.remove(TABLE.cd, { uid: p.uid })
       await ctx.database.create(TABLE.cd, {
-        userId: p.userId, type: 1, createTime: new Date(), scheduledTime: 0,
+        uid: p.uid, type: 1, createTime: new Date(), scheduledTime: 0,
       })
       return '🧘 你已进入闭关状态，发送「出关」结算修为。'
     })
@@ -31,17 +31,17 @@ export function registerCultivateCommands(ctx: Context) {
   ctx.command('出关', '结束闭关结算修为')
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
-      const rows = await ctx.database.get(TABLE.cd, { userId: p.userId })
+      const rows = await ctx.database.get(TABLE.cd, { uid: p.uid })
       if (!rows[0] || rows[0].type !== 1) return '你不在闭关状态'
       const minutes = Math.floor((Date.now() - +new Date(rows[0].createTime)) / 60000)
 
-      const buff = await getBuff(ctx, p.userId)
+      const buff = await getBuff(ctx, p.uid)
       const spotBonus = 1 + (buff.blessedSpot || 0) * 0.05
-      const cultSpeed = await computeCultivateSpeed(ctx, p.userId)
+      const cultSpeed = await computeCultivateSpeed(ctx, p.uid)
       const base = ((ctx as any).config?.closeExpPerMinute ?? 10)
       const lv = getLevel(p.level)!
 
-      const qiBonus = await getQiFlagBonus(ctx, p.userId)
+      const qiBonus = await getQiFlagBonus(ctx, p.uid)
       const rawGain = Math.floor(minutes * base * spotBonus * (1 + cultSpeed) * qiBonus.cultivateMul)
       const maxGain = Math.floor(lv.expToNext * 1.5)
       const gain = Math.min(rawGain, maxGain)
@@ -54,10 +54,10 @@ export function registerCultivateCommands(ctx: Context) {
       p.exp += gain
       p.hp = Math.min(p.maxhp, p.hp + hpHeal)
       p.mp = Math.min(p.maxmp, p.mp + mpHeal)
-      await ctx.database.set(TABLE.player, { userId: p.userId }, {
+      await ctx.database.set(TABLE.player, { uid: p.uid }, {
         exp: p.exp, hp: p.hp, mp: p.mp,
       })
-      await ctx.database.remove(TABLE.cd, { userId: p.userId })
+      await ctx.database.remove(TABLE.cd, { uid: p.uid })
 
       const notes: string[] = []
       if (cultSpeed > 0) notes.push(`功法 +${(cultSpeed * 100).toFixed(1)}%`)
@@ -83,7 +83,7 @@ export function registerCultivateCommands(ctx: Context) {
       if (!(await costStone(ctx, p.uid, actualSpend))) return '灵石不足'
       const gain = Math.floor(actualSpend / 10)
       p.exp += gain
-      await ctx.database.set(TABLE.player, { userId: p.userId }, { exp: p.exp })
+      await ctx.database.set(TABLE.player, { uid: p.uid }, { exp: p.exp })
       return `💠 消耗 ${actualSpend} 灵石，获得修为 +${gain}。`
     })
 
@@ -93,7 +93,7 @@ export function registerCultivateCommands(ctx: Context) {
       const p = await requirePlayer(ctx, session)
       const info = checkBreakthrough(p)
       if (!info.nextLevelId) return info.message
-      const oneShot = await computeOneShotBreakthroughBonus(ctx, p.userId, p.level)
+      const oneShot = await computeOneShotBreakthroughBonus(ctx, p.uid, p.level)
       const finalRate = Math.min(100, info.rate + oneShot.bonus)
       const lines = [
         `当前境界：${info.currentName}`,
@@ -105,7 +105,7 @@ export function registerCultivateCommands(ctx: Context) {
         const names = info.requirePill.map(id => (data.pills[id] ?? data.craftPills[id])?.name ?? id)
         lines.push(`推荐丹药：${names.join('、')}（服用可提升突破率）`)
       }
-      const back = await ctx.database.get(TABLE.back, { userId: p.userId })
+      const back = await ctx.database.get(TABLE.back, { uid: p.uid })
       const usable: string[] = []
       for (const it of back) {
         const pill = data.pills[String(it.goodsId)]
@@ -144,7 +144,7 @@ export function registerCultivateCommands(ctx: Context) {
       const p = await requirePlayer(ctx, session)
       const before = p.exp
       p.exp = Math.floor(p.exp)
-      await ctx.database.set(TABLE.player, { userId: p.userId }, { exp: p.exp })
+      await ctx.database.set(TABLE.player, { uid: p.uid }, { exp: p.exp })
       return `修为已整理：${before.toFixed(2)} → ${p.exp}`
     })
 }
@@ -166,13 +166,13 @@ async function doBreakthrough(ctx: Context, session: any, useDue: boolean) {
   // 渡厄丹保护（可选）
   let dueProtect = false
   if (useDue) {
-    const ok = await removeItem(ctx, p.userId, 1999, 1)
+    const ok = await removeItem(ctx, p.uid, 1999, 1)
     if (!ok) return '背包中没有渡厄丹，请改用「直接突破」'
     dueProtect = true
   }
 
   // 单次限定突破丹加成（从独立表读，不写 levelUpRate）
-  const oneShot = await computeOneShotBreakthroughBonus(ctx, p.userId, p.level)
+  const oneShot = await computeOneShotBreakthroughBonus(ctx, p.uid, p.level)
   const finalRate = Math.min(100, info.rate + oneShot.bonus)
 
   const success = Math.random() * 100 < finalRate
@@ -184,7 +184,7 @@ async function doBreakthrough(ctx: Context, session: any, useDue: boolean) {
   if (success) {
     p.level = info.nextLevelId
     p.levelUpRate = 0
-    await ctx.database.set(TABLE.player, { userId: p.userId }, {
+    await ctx.database.set(TABLE.player, { uid: p.uid }, {
       level: p.level, exp: p.exp, levelUpRate: 0, levelUpCd: cdStamp,
     })
     await refreshPlayerStats(ctx, p)
@@ -199,7 +199,7 @@ async function doBreakthrough(ctx: Context, session: any, useDue: boolean) {
   p.levelUpRate = (p.levelUpRate || 0) + rateGain
 
   // ✅ B3：失败也写入 levelUpCd，避免零间隔反复刷突破
-  await ctx.database.set(TABLE.player, { userId: p.userId }, {
+  await ctx.database.set(TABLE.player, { uid: p.uid }, {
     exp: p.exp, levelUpRate: p.levelUpRate, levelUpCd: cdStamp,
   })
 
