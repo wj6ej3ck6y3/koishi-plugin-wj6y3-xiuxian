@@ -1,5 +1,5 @@
 import { Context } from 'koishi'
-import { getLevel } from '../data'
+import { data, getLevel } from '../data'
 import { TABLE } from '../models'
 import {
   simulateBattle, addStone, addItem, refreshPlayerStats,
@@ -8,7 +8,6 @@ import {
   recordBattle,
   CombatUnit,
   formatPct,
-  getItemNameById,
 } from '../utils'
 
 // ======================= 世界 BOSS 数值配置 =======================
@@ -24,9 +23,13 @@ const WORLD_BOSS_CONFIG = {
   CRIT_DMG: 1.5,
   PEN: 0,
 
-  KILL_EXP: 500,
-  KILL_STONE: 1000,
-  KILL_DROP_ID: 1101,
+  // 击杀按伤害占比发奖：
+  //   修为 = ⌊伤害占比 × BOSS 境界 expToNext × KILL_EXP_RATIO⌋
+  //   灵石 = ⌊伤害占比 × BOSS 境界 expToNext × KILL_STONE_RATIO⌋
+  KILL_EXP_RATIO: 0.1,
+  KILL_STONE_RATIO: 0.01,
+
+  // 最后一击掉落：1~3 件，从下方掉落池按权重抽取
   KILL_DROP_MIN: 1,
   KILL_DROP_MAX: 3,
 }
@@ -41,6 +44,7 @@ function rollWorldBossLevel(topPlayerLevelId: string): number {
 
 /**
  * 依世界 BOSS 配置构建战斗单位。
+ * 每次战斗都用它重建（DB 只存进度），因此改配置后所有活跃 BOSS 立即生效。
  */
 export function buildWorldBossUnit(name: string, levelId: string): CombatUnit {
   const lv = getLevel(levelId) ?? getLevel('1')!
@@ -58,6 +62,87 @@ export function buildWorldBossUnit(name: string, levelId: string): CombatUnit {
     pen: WORLD_BOSS_CONFIG.PEN,
   }
 }
+
+// ======================= 最后一击掉落池 =======================
+
+interface BossDropEntry { id: number; name: string; weight: number }
+
+let _bossDropPoolCache: BossDropEntry[] | null = null
+
+/**
+ * 最后一击掉落池：
+ *   · 主功法 / 神通 / 武器 / 防具 —— 仅天阶下品及以上（weight ≤ 25）
+ *   · 多次突破丹（breakthroughRate 累积类，丹藥屬性中的 1500~1505）
+ *   · 各级聚灵旗（5000~5004）
+ *   · 各级炼丹炉（4001~4003）
+ * 全部按物品自身的 weight 加权抽取
+ */
+function buildBossDropPool(): BossDropEntry[] {
+  if (_bossDropPoolCache) return _bossDropPoolCache
+
+  const pool: BossDropEntry[] = []
+  const push = (id: string, v: any) => {
+    if (!v?.name) return
+    pool.push({
+      id: Number(id),
+      name: v.name,
+      weight: Math.max(1, Number(v.weight) || 1),
+    })
+  }
+
+  // 天阶下品以上 = weight ≤ 25（对应品階概率表：天阶下品=25 / 天阶上品=20 / 仙阶下品=15 / 仙阶上品=10）
+  const HIGH_TIER_MAX_WEIGHT = 25
+
+  for (const [id, v] of Object.entries(data.gongfa)) {
+    if ((v as any).weight <= HIGH_TIER_MAX_WEIGHT) push(id, v)
+  }
+  for (const [id, v] of Object.entries(data.shentong)) {
+    if ((v as any).weight <= HIGH_TIER_MAX_WEIGHT) push(id, v)
+  }
+  for (const [id, v] of Object.entries(data.weapons)) {
+    if ((v as any).weight <= HIGH_TIER_MAX_WEIGHT) push(id, v)
+  }
+  for (const [id, v] of Object.entries(data.armors)) {
+    if ((v as any).weight <= HIGH_TIER_MAX_WEIGHT) push(id, v)
+  }
+
+  // 多次突破丹：按 stat === 'breakthroughRate' 识别（1500~1505 冰心丹~天命炼心丹）
+  for (const [id, v] of Object.entries(data.pills)) {
+    const mods = ((v as any).modifiers ?? []) as Array<{ stat: string }>
+    if (mods.some(m => m.stat === 'breakthroughRate')) push(id, v)
+  }
+
+  // 各级聚灵旗
+  for (const [id, v] of Object.entries(data.qiFlags)) push(id, v)
+
+  // 各级炼丹炉
+  for (const [id, v] of Object.entries(data.furnaces)) push(id, v)
+
+  _bossDropPoolCache = pool
+  return pool
+}
+
+/** 按权重随机抽 count 件（允许同名重复），返回 [{id, name}] */
+function rollBossDrops(count: number): Array<{ id: number; name: string }> {
+  const pool = buildBossDropPool()
+  if (pool.length === 0) return []
+
+  const total = pool.reduce((s, it) => s + it.weight, 0)
+  const out: Array<{ id: number; name: string }> = []
+
+  for (let i = 0; i < count; i++) {
+    let r = Math.random() * total
+    let picked = pool[pool.length - 1]
+    for (const it of pool) {
+      r -= it.weight
+      if (r <= 0) { picked = it; break }
+    }
+    out.push({ id: picked.id, name: picked.name })
+  }
+  return out
+}
+
+// ======================= 命令注册 =======================
 
 export function registerBossCommands(ctx: Context) {
   ctx.command('世界boss帮助', 'BOSS 说明').action(() => [
@@ -105,6 +190,7 @@ export function registerBossCommands(ctx: Context) {
       if (!boss) return '编号不存在'
       if (boss.hp <= 0) return '该 BOSS 已被击杀'
 
+      // 用世界 BOSS 配置重建战斗单位（DB 内 hp/atk 覆盖为最新进度）
       const bossUnit = buildWorldBossUnit(boss.name, String(boss.level))
       bossUnit.hp = boss.hp
       bossUnit.maxhp = boss.maxHp
@@ -112,6 +198,7 @@ export function registerBossCommands(ctx: Context) {
       const result = simulateBattle(me, bossUnit)
       const myDmg = Math.floor(boss.hp - bossUnit.hp)
 
+      // 累积参战伤害
       const exist = await ctx.database.get(TABLE.bossP, { bossId: boss.id, uid: p.uid })
       const oldDmg = exist[0]?.damage ?? 0
       if (exist[0]) {
@@ -138,37 +225,71 @@ export function registerBossCommands(ctx: Context) {
         opponentName: boss.name,
       })
 
+      // ==================== 击杀结算 ====================
       if (bossUnit.hp <= 0) {
         const parts = await ctx.database.get(TABLE.bossP, { bossId: boss.id })
-        const rewards: string[] = []
+        const totalDmg = parts.reduce((s, pt) => s + (pt.damage || 0), 0)
+        const bossLv = getLevel(String(boss.level))
+        const baseExp = bossLv?.expToNext ?? 0
+
+        const rewardLines: string[] = []
         for (const pt of parts) {
           const pl = (await ctx.database.get(TABLE.player, { uid: pt.uid }))[0]
           if (!pl) continue
-          pl.exp += WORLD_BOSS_CONFIG.KILL_EXP
-          await ctx.database.set(TABLE.player, { uid: pl.uid }, { exp: pl.exp })
-          await addStone(ctx, pl.uid, WORLD_BOSS_CONFIG.KILL_STONE)
-          rewards.push(`${pl.userName}（累计伤害 ${Math.floor(pt.damage)}）`)
+
+          const ratio = totalDmg > 0 ? (pt.damage || 0) / totalDmg : 0
+          const expReward = Math.floor(ratio * baseExp * WORLD_BOSS_CONFIG.KILL_EXP_RATIO)
+          const stoneReward = Math.floor(ratio * baseExp * WORLD_BOSS_CONFIG.KILL_STONE_RATIO)
+
+          if (expReward > 0) {
+            pl.exp += expReward
+            await ctx.database.set(TABLE.player, { uid: pl.uid }, { exp: pl.exp })
+          }
+          if (stoneReward > 0) await addStone(ctx, pl.uid, stoneReward)
+
+          rewardLines.push(
+            `· ${pl.userName}（伤害 ${Math.floor(pt.damage)}，占比 ${(ratio * 100).toFixed(1)}%）` +
+            ` → 修为 +${expReward}｜灵石 +${stoneReward}`,
+          )
         }
 
-        // ✅ 最后一击奖励：本次执行命令、且 battle winner === 'a' 即为击杀者
+        // 最后一击掉落：1~3 件，从掉落池按权重抽取（允许重复，同名自动合并显示）
         let lastHitLine = ''
         if (result.winner === 'a') {
           const dropRange = WORLD_BOSS_CONFIG.KILL_DROP_MAX - WORLD_BOSS_CONFIG.KILL_DROP_MIN + 1
           const dropCount = WORLD_BOSS_CONFIG.KILL_DROP_MIN + Math.floor(Math.random() * dropRange)
-          const dropName = getItemNameById(WORLD_BOSS_CONFIG.KILL_DROP_ID)
-          try {
-            await addItem(ctx, p.uid, WORLD_BOSS_CONFIG.KILL_DROP_ID, dropCount)
-            lastHitLine = `\n🎯 最后一击：${me.name} 获得「${dropName}」×${dropCount}`
-          } catch (e: any) {
-            ctx.logger('xiuxian').warn(`最后一击奖励发放失败: ${e?.message ?? e}`)
-            lastHitLine = `\n⚠️ 最后一击奖励发放失败（物品 #${WORLD_BOSS_CONFIG.KILL_DROP_ID} ×${dropCount}）`
+          const drops = rollBossDrops(dropCount)
+
+          const merged = new Map<number, { name: string; num: number }>()
+          for (const d of drops) {
+            const cur = merged.get(d.id)
+            if (cur) cur.num += 1
+            else merged.set(d.id, { name: d.name, num: 1 })
+          }
+
+          if (merged.size > 0) {
+            const dropStr = [...merged.values()].map(x => `${x.name}×${x.num}`).join('、')
+            try {
+              for (const [id, info] of merged) {
+                await addItem(ctx, p.uid, id, info.num)
+              }
+              lastHitLine = `\n🎯 最后一击：${me.name} 获得 ${dropStr}`
+            } catch (e: any) {
+              ctx.logger('xiuxian').warn(`最后一击奖励发放失败: ${e?.message ?? e}`)
+              lastHitLine = `\n⚠️ 最后一击奖励发放失败（${dropStr}）`
+            }
           }
         }
 
         await ctx.database.remove(TABLE.boss, { id: boss.id })
         await ctx.database.remove(TABLE.bossP, { bossId: boss.id })
-        return `🎉 击杀 ${boss.name}！\n参战：${rewards.join('、')}\n每人 +${WORLD_BOSS_CONFIG.KILL_EXP} 修为 +${WORLD_BOSS_CONFIG.KILL_STONE} 灵石${lastHitLine}`
+
+        const head = `🎉 击杀 ${boss.name}！（${bossLv?.name ?? '?'}｜参战 ${parts.length} 人｜总伤害 ${Math.floor(totalDmg)}）`
+        const rewardBlock = rewardLines.length ? ['参战者奖励：', ...rewardLines].join('\n') : ''
+        return [head, rewardBlock, lastHitLine].filter(Boolean).join('\n')
       }
+
+      // 未击杀
       return `⚔️ 你对 ${boss.name} 造成 ${myDmg} 伤害，剩 ${bossUnit.hp}/${boss.maxHp}（${formatPct(bossUnit.hp, boss.maxHp)}%，你的累计：${oldDmg + myDmg}）`
     })
 }

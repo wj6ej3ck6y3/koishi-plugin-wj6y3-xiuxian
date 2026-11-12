@@ -20,11 +20,11 @@ const POSITION_NAMES = ['散修', '宗主', '长老', '亲传弟子', '内门弟
 // ======================= 宗门任务数值配置 =======================
 const SECT_MISSION_CONFIG = {
   STARS: {
-    1: { hpMul: 0.7, atkMul: 0.7, defMul: 0.7, rewardStone: 500, rewardContrib: 50, rewardBuild: 50 },
-    2: { hpMul: 0.9, atkMul: 0.9, defMul: 0.9, rewardStone: 1000, rewardContrib: 50, rewardBuild: 100 },
-    3: { hpMul: 1.1, atkMul: 1.1, defMul: 1.1, rewardStone: 1500, rewardContrib: 50, rewardBuild: 150 },
-    4: { hpMul: 1.4, atkMul: 1.4, defMul: 1.4, rewardStone: 2000, rewardContrib: 50, rewardBuild: 200 },
-    5: { hpMul: 1.8, atkMul: 1.8, defMul: 1.8, rewardStone: 2500, rewardContrib: 50, rewardBuild: 250 },
+    1: { hpMul: 0.7, atkMul: 0.7, defMul: 0.7, rewardStone: 500, rewardContrib: 50, rewardBuild: 100 },
+    2: { hpMul: 0.9, atkMul: 0.9, defMul: 0.9, rewardStone: 1000, rewardContrib: 50, rewardBuild: 200 },
+    3: { hpMul: 1.1, atkMul: 1.1, defMul: 1.1, rewardStone: 1500, rewardContrib: 50, rewardBuild: 300 },
+    4: { hpMul: 1.4, atkMul: 1.4, defMul: 1.4, rewardStone: 2000, rewardContrib: 50, rewardBuild: 400 },
+    5: { hpMul: 1.8, atkMul: 1.8, defMul: 1.8, rewardStone: 2500, rewardContrib: 50, rewardBuild: 500 },
   } as Record<number, {
     hpMul: number; atkMul: number; defMul: number;
     rewardStone: number; rewardContrib: number; rewardBuild: number;
@@ -75,7 +75,7 @@ export async function settleSectDaily(ctx: Context, onlySectId?: number): Promis
     const snapshotAt = sect.offeringSnapshotAt ? new Date(sect.offeringSnapshotAt) : new Date(0)
     if (snapshotAt.toDateString() === today) continue
 
-    const buildBonus = Math.floor((sect.sectScale ?? 0) / 10000)
+    const buildBonus = Math.floor((sect.sectScale ?? 0) / 2000)
     const stoneAfter = Math.floor(sect.sectUsedStone ?? 0) + buildBonus
     const snapshot = Math.floor(stoneAfter * 0.001)
 
