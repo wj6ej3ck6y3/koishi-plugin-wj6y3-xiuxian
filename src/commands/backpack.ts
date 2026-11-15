@@ -269,7 +269,13 @@ export function registerBackpackCommands(ctx: Context) {
             } else if (m.stat === 'breakthroughRate') {
               p.levelUpRate = (p.levelUpRate || 0) + Math.round(m.value * 100)
             } else if (m.stat === 'hp') {
+              const beforeHp = p.hp
               p.hp = Math.min(p.maxhp, p.hp + Math.floor(p.maxhp * (m.value ?? 0)))
+              const actualHeal = Math.floor(p.hp - beforeHp)
+              if (meta.tag === '回复丹' && actualHeal > 0) {
+                const mpHeal = Math.floor(actualHeal / 2)
+                if (mpHeal > 0) p.mp = Math.min(p.maxmp, p.mp + mpHeal)
+              }
             } else if (m.stat === 'mp') {
               p.mp = Math.min(p.maxmp, p.mp + Math.floor(p.maxmp * (m.value ?? 0)))
             } else if (m.stat === 'atk' && m.mode === 'flat') {
@@ -310,7 +316,8 @@ export function registerBackpackCommands(ctx: Context) {
 
         let msg = `✅ 使用了 ${actualCount} 个「${meta.name}」`
         if (hasHpRecovery || hasMpRecovery) {
-          msg += `\n🩸 当前气血：${Math.floor(p.hp)}/${p.maxhp}（${formatPct(p.hp, p.maxhp)}%）\n💧 当前真元：${Math.floor(p.mp)}/${p.maxmp}（${formatPct(p.mp, p.maxmp)}%）`
+          msg +=  `\n🩸 当前气血：${Math.floor(p.hp)}/${p.maxhp}（${formatPct(p.hp, p.maxhp)}%）` +
+                  `\n💧 当前真元：${Math.floor(p.mp)}/${p.maxmp}（${formatPct(p.mp, p.maxmp)}%）`
         }
         return msg
       }
