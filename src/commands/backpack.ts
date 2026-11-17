@@ -269,11 +269,15 @@ export function registerBackpackCommands(ctx: Context) {
             } else if (m.stat === 'breakthroughRate') {
               p.levelUpRate = (p.levelUpRate || 0) + Math.round(m.value * 100)
             } else if (m.stat === 'hp') {
-              const beforeHp = p.hp
+              // 回复气血（受 maxhp 封顶）
               p.hp = Math.min(p.maxhp, p.hp + Math.floor(p.maxhp * (m.value ?? 0)))
-              const actualHeal = Math.floor(p.hp - beforeHp)
-              if (meta.tag === '回复丹' && actualHeal > 0) {
-                const mpHeal = Math.floor(actualHeal / 2)
+
+              // ✅ 回复丹：按「回血比例的一半」回复真元（基于 maxmp，不扣当前气血是否满）
+              if (meta.tag === '回复丹') {
+                const isPct = (m.mode ?? 'pct') === 'pct'
+                const mpHeal = isPct
+                  ? Math.floor(p.maxmp * (m.value ?? 0) / 2)
+                  : Math.floor((m.value ?? 0) / 2)
                 if (mpHeal > 0) p.mp = Math.min(p.maxmp, p.mp + mpHeal)
               }
             } else if (m.stat === 'mp') {
