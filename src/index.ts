@@ -21,6 +21,7 @@ import {
   getPlayer, resetDaily, getItemNameById, getNextId, addItem, estimatePrice, getSessionUid,
   claimByRemove, cleanupBattleRecords, clearBattleRecords,
   migrateLegacyPillCounts, normalizeFlooredFields,
+  formatCompact,
 } from './utils'
 
 export const name = 'xiuxian'
@@ -172,7 +173,7 @@ function setupTimers(ctx: Context, config: Config) {
         return
       }
       const b = await spawnWorldBoss(ctx)
-      logger.info(`[定时任务] 周一世界BOSS：已自动生成「${b.name}」（HP ${b.maxHp}）`)
+      logger.info(`[定时任务] 周一世界BOSS：已自动生成「${b.name}」（HP ${formatCompact(b.maxHp)}）`)
     } catch (e: any) {
       logger.warn(`[定时任务] 周一世界BOSS生成失败: ${e?.message ?? e}`)
     }

@@ -4,6 +4,7 @@ import {
   requirePlayer, addStone, costStone, getStone, getPlayer, addItem, removeItem,
   getItemNameById, getNextId, getQualityLabel, ALL_ITEM_TABLES, estimatePrice, findItemInBackpack,
   getOrCreateBuff, getEquippedIds, claimByRemove,
+  formatCompact,
 } from '../utils'
 import { findItemByName } from './backpack'
 
@@ -36,7 +37,7 @@ export function registerShopCommands(ctx: Context) {
         const qualityStr = quality ? `[${quality}] ` : ''
         const tag = (meta as any)?.tag
         const tagStr = tag ? `【${tag}】` : ''
-        return `【${s.id}】${s.sellerName}｜${qualityStr}${tagStr}「${name}」×${s.goodsNum}｜${s.price} 灵石`
+        return `【${s.id}】${s.sellerName}｜${qualityStr}${tagStr}「${name}」×${s.goodsNum}｜${formatCompact(s.price)} 灵石`
       })
       return `🏪 坊市（${list.length} 件）：\n` + lines.join('\n')
     })
@@ -66,7 +67,7 @@ export function registerShopCommands(ctx: Context) {
       const name = getItemNameById(s.goodsId)
       const quality = getQualityLabel(s.goodsId)
       const qualityStr = quality ? `[${quality}]` : ''
-      return `✅ 购买成功，花费 ${s.price} 灵石，获得 ${qualityStr}「${name}」×${s.goodsNum}`
+      return `✅ 购买成功，花费 ${formatCompact(s.price)} 灵石，获得 ${qualityStr}「${name}」×${s.goodsNum}`
     })
 
   ctx.command('坊市上架 <name:string> <price:number>', '上架（价格最低 1 灵石，小数部分舍去）')
@@ -94,7 +95,7 @@ export function registerShopCommands(ctx: Context) {
         goodsId, price: finalPrice,
         goodsNum: 1, createTime: new Date(),
       })
-      return `🏪 「${name}」已上架，价格 ${finalPrice} 灵石`
+      return `🏪 「${name}」已上架，价格 ${formatCompact(finalPrice)} 灵石`
     })
 
   ctx.command('坊市下架 <no:number>', '下架')
@@ -128,7 +129,7 @@ export function registerShopCommands(ctx: Context) {
         goodsId: Number(idStr), price: finalPrice,
         goodsNum: 1, createTime: new Date(),
       })
-      return `✅ 系统已上架「${name}」，价格 ${finalPrice} 灵石`
+      return `✅ 系统已上架「${name}」，价格 ${formatCompact(finalPrice)} 灵石`
     })
 
   // ===== 系统回收（玩家将背包物品按半价卖给系统） =====
@@ -162,6 +163,6 @@ export function registerShopCommands(ctx: Context) {
 
       const quality = getQualityLabel(goodsId)
       const qualityStr = quality ? `[${quality}]` : ''
-      return `♻️ 系统回收 ${qualityStr}「${meta.name}」×${actualCount}\n💎 获得 ${totalPrice} 灵石（单价 ${unitPrice}）`
+      return `♻️ 系统回收 ${qualityStr}「${meta.name}」×${actualCount}\n💎 获得 ${formatCompact(totalPrice)} 灵石（单价 ${formatCompact(unitPrice)}）`
     })
 }

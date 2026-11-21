@@ -10,6 +10,7 @@ import {
   isSameDay,
   formatRemainTime,
   getAffectedRows,
+  formatCompact,
 } from '../utils'
 
 const BOUNTY_SIZE = 3
@@ -117,7 +118,7 @@ function formatBountyList(rows: Array<{ slot: number; questKey: string; dropJson
     const stoneReward = calcStoneReward(baseExp, level, sr)
     lines.push(`【${r.slot}】${cat}·${name}`)
     lines.push(`    成功率 ${sr}%｜ ${task.timeSec} 分钟`)
-    lines.push(`    修为 +${expReward}｜ 灵石折算 +${stoneReward}`)
+    lines.push(`    修为 +${formatCompact(expReward)}｜ 灵石折算 +${formatCompact(stoneReward)}`)
     lines.push(`    🎁 额外掉落：${dropStr}`)
   }
   return lines.join('\n')
@@ -198,10 +199,10 @@ async function trySettleBounty(
     if (wantStone) {
       const stoneReward = calcStoneReward(baseExp, level, successRate)
       await addStone(ctx, p.uid, stoneReward)
-      msg = `✅ 「${name}」成功！\n💎 获得灵石 +${stoneReward}`
+      msg = `✅ 「${name}」成功！\n💎 获得灵石 +${formatCompact(stoneReward)}`
     } else {
       await addPlayerExp(ctx, p.uid, expReward)
-      msg = `✅ 「${name}」成功！\n🌱 获得修为 +${expReward}`
+      msg = `✅ 「${name}」成功！\n🌱 获得修为 +${formatCompact(expReward)}`
     }
     if (drops.length > 0) {
       for (const d of drops) await addItem(ctx, p.uid, d.id, d.num)
@@ -210,7 +211,7 @@ async function trySettleBounty(
   } else {
     const expGain = Math.floor(calcExpReward(baseExp, level, successRate) * 0.3)
     await addPlayerExp(ctx, p.uid, expGain)
-    msg = `❌ 「${name}」失败，仍获得修为 +${expGain}`
+    msg = `❌ 「${name}」失败，仍获得修为 +${formatCompact(expGain)}`
   }
 
   await cleanQuestAndWork()

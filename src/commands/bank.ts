@@ -1,6 +1,6 @@
 import { $, Context } from 'koishi'
 import { TABLE, BankRow } from '../models'
-import { requirePlayer, getStone, addStone, costStone, getAffectedRows } from '../utils'
+import { requirePlayer, getStone, addStone, costStone, getAffectedRows, formatCompact } from '../utils'
 
 const LEVELS = [
   { lv: 1, cap: 1_000_000, ratePerHour: 0.001, upFee: 0 },
@@ -19,14 +19,14 @@ function levelOf(bank: BankRow) {
 }
 
 /** 结息结果的说明文字（存灵石 / 取灵石 / 结算 / 升级共用） */
-function formatInterestLines(s: SettleResult, cap: number, header = `💹 结算利息 +${s.total}`): string[] {
+function formatInterestLines(s: SettleResult, cap: number, header = `💹 结算利息 +${formatCompact(s.total)}`): string[] {
   if (s.total <= 0) return []
   const lines = [header]
   if (s.direct > 0) {
-    lines.push(`  · 存入灵庄 +${s.banked}（已达上限 ${cap}）`)
-    lines.push(`  · 直接到账 +${s.direct}`)
+    lines.push(`  · 存入灵庄 +${formatCompact(s.banked)}（已达上限 ${formatCompact(cap)}）`)
+    lines.push(`  · 直接到账 +${formatCompact(s.direct)}`)
   } else {
-    lines.push(`  · 全部存入灵庄 +${s.banked}`)
+    lines.push(`  · 全部存入灵庄 +${formatCompact(s.banked)}`)
   }
   return lines
 }
@@ -95,7 +95,7 @@ export function registerBankCommands(ctx: Context) {
 
       const balance = await getStone(ctx, p.uid)
       if (balance < amount) {
-        return `⚠️ 灵石不足（当前 ${balance}，需 ${amount}）`
+        return `⚠️ 灵石不足（当前 ${formatCompact(balance)}，需 ${formatCompact(amount)}）`
       }
 
       const bank = await load(ctx, p.uid)
@@ -137,12 +137,12 @@ export function registerBankCommands(ctx: Context) {
       const lines = formatInterestLines({ total: gain, banked, direct }, cfg.cap)
 
       if (deposited === amount) {
-        lines.push(`🏦 存入 ${amount} 灵石`)
+        lines.push(`🏦 存入 ${formatCompact(amount)} 灵石`)
       } else {
-        if (deposited > 0) lines.push(`🏦 存入 ${deposited} 灵石`)
-        lines.push(`↩️ ${amount - deposited} 灵石未存入`)
+        if (deposited > 0) lines.push(`🏦 存入 ${formatCompact(deposited)} 灵石`)
+        lines.push(`↩️ ${formatCompact(amount - deposited)} 灵石未存入`)
       }
-      lines.push(`当前存款 ${bank.saveStone} / ${cfg.cap}`)
+      lines.push(`当前存款 ${formatCompact(bank.saveStone)} / ${formatCompact(cfg.cap)}`)
 
       return lines.join('\n')
     })
@@ -166,15 +166,15 @@ export function registerBankCommands(ctx: Context) {
       }, row => ({ saveStone: $.sub(row.saveStone, amount) }))
       if (getAffectedRows(res) === 0) {
         const [now] = await ctx.database.get(TABLE.bank, { uid: p.uid })
-        return [...settleLines, `⚠️ 存款不足（当前 ${now?.saveStone ?? bank.saveStone}，需 ${amount}）`].join('\n')
+        return [...settleLines, `⚠️ 存款不足（当前 ${formatCompact(now?.saveStone ?? bank.saveStone)}，需 ${formatCompact(amount)}）`].join('\n')
       }
       await addStone(ctx, p.uid, amount)
       const [after] = await ctx.database.get(TABLE.bank, { uid: p.uid })
 
       return [
         ...settleLines,
-        `🏦 取出 ${amount} 灵石`,
-        `当前存款 ${after?.saveStone ?? Math.max(0, bank.saveStone - amount)} / ${cfg.cap}`,
+        `🏦 取出 ${formatCompact(amount)} 灵石`,
+        `当前存款 ${formatCompact(after?.saveStone ?? Math.max(0, bank.saveStone - amount))} / ${formatCompact(cfg.cap)}`,
       ].join('\n')
     })
 
@@ -185,10 +185,10 @@ export function registerBankCommands(ctx: Context) {
       const cfg = levelOf(bank)
       const s = await settle(ctx, p.uid, bank)
 
-      if (s.total === 0) return `🏦 当前存款 ${bank.saveStone}，本次无利息`
+      if (s.total === 0) return `🏦 当前存款 ${formatCompact(bank.saveStone)}，本次无利息`
 
-      const lines = formatInterestLines(s, cfg.cap, `🏦 本次利息 +${s.total}`)
-      lines.push(`当前存款 ${bank.saveStone} / ${cfg.cap}`)
+      const lines = formatInterestLines(s, cfg.cap, `🏦 本次利息 +${formatCompact(s.total)}`)
+      lines.push(`当前存款 ${formatCompact(bank.saveStone)} / ${formatCompact(cfg.cap)}`)
       return lines.join('\n')
     })
 
@@ -199,7 +199,7 @@ export function registerBankCommands(ctx: Context) {
       const bank = await load(ctx, p.uid)
       const next = LEVELS[bank.bankLevel]
       if (!next) return '已是最高等级'
-      if (!(await costStone(ctx, p.uid, next.upFee))) return `需 ${next.upFee} 灵石`
+      if (!(await costStone(ctx, p.uid, next.upFee))) return `需 ${formatCompact(next.upFee)} 灵石`
 
       // 升级前先按旧等级结息，避免新利率追溯套用到之前的存款时间
       const cfg = levelOf(bank)
@@ -218,8 +218,8 @@ export function registerBankCommands(ctx: Context) {
       }
 
       return [
-        ...formatInterestLines(s, cfg.cap, `💹 升级前先按 ${cfg.lv} 级利率结息 +${s.total}`),
-        `🏦 灵庄升级至 ${next.lv} 级（上限 ${next.cap}，时息 ${next.ratePerHour * 100}%）`,
+        ...formatInterestLines(s, cfg.cap, `💹 升级前先按 ${cfg.lv} 级利率结息 +${formatCompact(s.total)}`),
+        `🏦 灵庄升级至 ${next.lv} 级（上限 ${formatCompact(next.cap)}，时息 ${next.ratePerHour * 100}%）`,
       ].join('\n')
     })
 
@@ -231,9 +231,9 @@ export function registerBankCommands(ctx: Context) {
       const next = LEVELS[bank.bankLevel]
       return [
         `🏦 灵庄等级：${bank.bankLevel} 级`,
-        `存款：${bank.saveStone} / ${cfg.cap}`,
+        `存款：${formatCompact(bank.saveStone)} / ${formatCompact(cfg.cap)}`,
         `时息：${cfg.ratePerHour * 100}%`,
-        next ? `升级费用：${next.upFee}` : '已是最高级',
+        next ? `升级费用：${formatCompact(next.upFee)}` : '已是最高级',
       ].join('\n')
     })
 }

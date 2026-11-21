@@ -20,6 +20,7 @@ import {
   findItemInBackpack,
   formatPct,
   DUE_PILL_ID,
+  formatCompact,
 } from '../utils'
 
 
@@ -424,8 +425,8 @@ export function registerBackpackCommands(ctx: Context) {
           msg += `（整局已服 ${await getPillUsedCount(ctx, p.uid, goodsId)}/${limit} 次）`
         }
         if (hasHpRecovery || hasMpRecovery) {
-          msg += `\n🩸 当前气血：${Math.floor(p.hp)}/${p.maxhp}（${formatPct(p.hp, p.maxhp)}%）` +
-            `\n💧 当前真元：${Math.floor(p.mp)}/${p.maxmp}（${formatPct(p.mp, p.maxmp)}%）`
+          msg += `\n🩸 当前气血：${formatCompact(p.hp)}/${formatCompact(p.maxhp)}（${formatPct(p.hp, p.maxhp)}%）` +
+            `\n💧 当前真元：${formatCompact(p.mp)}/${formatCompact(p.maxmp)}（${formatPct(p.mp, p.maxmp)}%）`
         }
         return msg
       }

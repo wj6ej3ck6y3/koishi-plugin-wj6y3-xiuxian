@@ -11,6 +11,7 @@ import {
   formatRemainTime,
   getAffectedRows,
   resolveAtUid,
+  formatCompact,
 } from '../utils'
 
 /**
@@ -121,7 +122,7 @@ export function registerLongtermCommands(ctx: Context, config: Config) {
       const p = await requirePlayer(ctx, session)
       if (p.atkPractice >= 9) return '攻击修炼已达 9 重'
       const cost = 1_000_000 * Math.pow(2, p.atkPractice)
-      if (!(await costStone(ctx, p.uid, cost))) return `需 ${cost} 灵石`
+      if (!(await costStone(ctx, p.uid, cost))) return `需 ${formatCompact(cost)} 灵石`
       await ctx.database.set(TABLE.player, { uid: p.uid }, { atkPractice: p.atkPractice + 1 })
       await recomputeAndSaveStats(ctx, p)
       return `🗿 攻击修炼提升至 ${p.atkPractice + 1} 重（+${(p.atkPractice + 1) * 4}% 攻击）`
@@ -167,7 +168,7 @@ export function registerLongtermCommands(ctx: Context, config: Config) {
         levelUpRate: p.levelUpRate,
       })
 
-      return `✨ 顿悟！修为 +${gainExp}${gainRate ? `，突破率 +${gainRate}%` : ''}`
+      return `✨ 顿悟！修为 +${formatCompact(gainExp)}${gainRate ? `，突破率 +${gainRate}%` : ''}`
     })
 
   // 飞升转世
@@ -183,7 +184,7 @@ export function registerLongtermCommands(ctx: Context, config: Config) {
       const maxLv = getLevel(maxLevelId)
       if (!maxLv) return '境界数据缺失'
       if (p.level !== maxLevelId) return `需达「${maxLv.name}」方可飞升`
-      if (p.exp < maxLv.expToNext) return `修为不足（需 ${maxLv.expToNext}，当前 ${Math.floor(p.exp)}）`
+      if (p.exp < maxLv.expToNext) return `修为不足（需 ${formatCompact(maxLv.expToNext)}，当前 ${formatCompact(p.exp)}）`
 
       const newRebirth = (p.rebirth || 0) + 1
       const [rootId, root] = rollRootExcluding(newRebirth)
@@ -244,7 +245,7 @@ export function registerLongtermCommands(ctx: Context, config: Config) {
       await ctx.database.set(TABLE.player, { uid: target.uid }, {
         levelUpRate: target.levelUpRate,
       })
-      return `与 ${target.userName} 双修，双方修为 +${gain}${rateMsg}`
+      return `与 ${target.userName} 双修，双方修为 +${formatCompact(gain)}${rateMsg}`
     })
 }
 

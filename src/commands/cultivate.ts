@@ -17,6 +17,7 @@ import {
   formatRemainTime,
   formatPct,
   DUE_PILL_ID,
+  formatCompact,
 } from '../utils'
 
 export function registerCultivateCommands(ctx: Context, config: Config) {
@@ -70,13 +71,13 @@ export function registerCultivateCommands(ctx: Context, config: Config) {
       if (cultSpeed > 0) notes.push(`功法 +${(cultSpeed * 100).toFixed(1)}%`)
       if (qiBonus.cultivateMul > 1) notes.push(`聚灵旗 ×${qiBonus.cultivateMul.toFixed(2)}`)
       const speedNote = notes.length ? `（${notes.join(' / ')}）` : ''
-      const capNote = capped ? `\n⚠️ 本次修为已达闭关上限 ${maxGain}（1.5×突破需求）` : ''
+      const capNote = capped ? `\n⚠️ 本次修为已达闭关上限 ${formatCompact(maxGain)}（1.5×突破需求）` : ''
 
       return [
-        `🎉 出关！闭关 ${minutes} 分钟，修为 +${gain}${speedNote}`,
-        `🩸 当前气血：${Math.floor(p.hp)}/${p.maxhp}（${formatPct(p.hp, p.maxhp)}%）`,
-        `💧 当前真元：${Math.floor(p.mp)}/${p.maxmp}（${formatPct(p.mp, p.maxmp)}%）`,
-        `📈 当前修为：${Math.floor(p.exp)}/${lv.expToNext}${capNote}`,
+        `🎉 出关！闭关 ${minutes} 分钟，修为 +${formatCompact(gain)}${speedNote}`,
+        `🩸 当前气血：${formatCompact(p.hp)}/${formatCompact(p.maxhp)}（${formatPct(p.hp, p.maxhp)}%）`,
+        `💧 当前真元：${formatCompact(p.mp)}/${formatCompact(p.maxmp)}（${formatPct(p.mp, p.maxmp)}%）`,
+        `📈 当前修为：${formatCompact(p.exp)}/${formatCompact(lv.expToNext)}${capNote}`,
       ].join('\n')
     })
 
@@ -90,7 +91,7 @@ export function registerCultivateCommands(ctx: Context, config: Config) {
       if (!(await costStone(ctx, p.uid, actualSpend))) return '灵石不足'
       const gain = Math.floor(actualSpend / 10)
       await addPlayerExp(ctx, p.uid, gain)
-      return `💠 消耗 ${actualSpend} 灵石，获得修为 +${gain}。`
+      return `💠 消耗 ${formatCompact(actualSpend)} 灵石，获得修为 +${formatCompact(gain)}。`
     })
 
   // ---------- 突破信息查询 ----------
@@ -106,7 +107,7 @@ export function registerCultivateCommands(ctx: Context, config: Config) {
         `下一境界：${getLevel(info.nextLevelId)?.name}`,
         `突破概率：${finalRate}% ${info.big ? ' 大境界突破' : ''}`,
       ]
-      lines.push(`修为：${Math.floor(p.exp)} / ${info.expRequired}`)
+      lines.push(`修为：${formatCompact(p.exp)} / ${formatCompact(info.expRequired)}`)
       if (info.requirePill.length) {
         const names = info.requirePill.map(id => (data.pills[id] ?? data.craftPills[id])?.name ?? id)
         lines.push(`推荐丹药：${names.join('、')}（服用可提升突破率）`)
@@ -228,5 +229,5 @@ async function doBreakthrough(ctx: Context, config: Config, session: Session | u
   const newInfo = checkBreakthrough(p)
   const newTotalRate = Math.min(100, newInfo.rate + oneShot.bonus)
 
-  return `💥 突破失败！损失修为 ${loss}，突破率 +${rateGain}%（总突破率 ${newTotalRate}%）${oneShotNote}${dueNote}`
+  return `💥 突破失败！损失修为 ${formatCompact(loss)}，突破率 +${rateGain}%（总突破率 ${newTotalRate}%）${oneShotNote}${dueNote}`
 }

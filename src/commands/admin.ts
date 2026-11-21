@@ -1,6 +1,6 @@
 import { Context } from 'koishi'
 import { TABLE } from '../models'
-import { addStone, formatPct, getPlayer, resolveAtUid } from '../utils'
+import { addStone, formatPct, getPlayer, resolveAtUid, formatCompact } from '../utils'
 
 export function registerAdminCommands(ctx: Context) {
   ctx.command('神秘力量 <amount:number>', '赠送灵石', { authority: 5 })
@@ -20,14 +20,14 @@ export function registerAdminCommands(ctx: Context) {
         const target = await getPlayer(ctx, targetUid)
         if (!target) return '目标尚未踏入仙途'
         await addStone(ctx, target.uid, amount)
-        return `💎 已向 ${target.userName} 发放 ${amount} 灵石`
+        return `💎 已向 ${target.userName} 发放 ${formatCompact(amount)} 灵石`
       }
 
       // 没有 @ → 全服发放
       const all = await ctx.database.get(TABLE.player, {})
       if (!all.length) return '当前没有任何玩家'
       for (const p of all) await addStone(ctx, p.uid, amount)
-      return `💎 已向全服 ${all.length} 人各发放 ${amount} 灵石`
+      return `💎 已向全服 ${all.length} 人各发放 ${formatCompact(amount)} 灵石`
     })
 
   ctx.command('重置状态', '重置气血真元', { authority: 5 })
@@ -47,8 +47,8 @@ export function registerAdminCommands(ctx: Context) {
         })
         return [
           `✅ 已重置 ${target.userName} 状态`,
-          `🩸 气血：${target.maxhp}/${target.maxhp}（${formatPct(target.maxhp, target.maxhp)}%）  ` +
-          `💧 真元：${target.maxmp}/${target.maxmp}（${formatPct(target.maxmp, target.maxmp)}%）`,
+          `🩸 气血：${formatCompact(target.maxhp)}/${formatCompact(target.maxhp)}（${formatPct(target.maxhp, target.maxhp)}%）  ` +
+          `💧 真元：${formatCompact(target.maxmp)}/${formatCompact(target.maxmp)}（${formatPct(target.maxmp, target.maxmp)}%）`,
         ].join('\n')
       }
 

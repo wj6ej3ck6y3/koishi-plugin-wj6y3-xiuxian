@@ -6,6 +6,7 @@ import {
   requirePlayer, addStone, addItem, addPlayerExp, floorRow,
   getBusyKind, getDropCategoryWeights, rollDrops, mergeDrops, formatDropList,
   isSameDay, formatRemainTime,
+  formatCompact,
 } from '../utils'
 
 // 秘境结果四档（掉落档不再是固定生骨丹）
@@ -58,7 +59,7 @@ export function registerRiftCommands(ctx: Context, config: Config) {
       if (chosen.kind === 'stone') {
         const a = 200 + Math.floor(Math.random() * 800)
         await addStone(ctx, p.uid, a)
-        msg.push(`🌀 探索秘境，发现灵石 ×${a}`)
+        msg.push(`🌀 探索秘境，发现灵石 ×${formatCompact(a)}`)
         if (Math.random() * 100 < dropChance) {
           const drops = rollDrops(weights, 1)
           if (drops.length > 0) {
@@ -72,7 +73,7 @@ export function registerRiftCommands(ctx: Context, config: Config) {
       if (chosen.kind === 'exp') {
         const a = 100 + Math.floor(Math.random() * 500)
         await addPlayerExp(ctx, p.uid, a)
-        msg.push(`🌀 偶遇灵气漩涡，修为 +${a}`)
+        msg.push(`🌀 偶遇灵气漩涡，修为 +${formatCompact(a)}`)
         if (Math.random() * 100 < dropChance) {
           const drops = rollDrops(weights, 1)
           if (drops.length > 0) {
@@ -99,6 +100,6 @@ export function registerRiftCommands(ctx: Context, config: Config) {
       const ratio = 0.15
       p.hp = Math.max(0, p.hp - Math.floor(p.maxhp * ratio))
       await ctx.database.set(TABLE.player, { uid: p.uid }, floorRow(TABLE.player, { hp: p.hp }))
-      return `🌀 触发陷阱，损失 ${Math.floor(p.maxhp * ratio)} 气血`
+      return `🌀 触发陷阱，损失 ${formatCompact(p.maxhp * ratio)} 气血`
     })
 }

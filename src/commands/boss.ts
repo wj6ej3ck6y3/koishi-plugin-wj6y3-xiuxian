@@ -14,6 +14,7 @@ import {
   getAffectedRows,
   CombatUnit,
   formatPct,
+  formatCompact,
 } from '../utils'
 
 // ======================= 世界 BOSS 数值配置 =======================
@@ -200,8 +201,8 @@ async function settleWorldBossKill(
         if (stoneReward > 0) await addStone(ctx, pl.uid, stoneReward)
 
         rewardLines.push(
-          `· ${pl.userName}（伤害 ${Math.floor(pt.damage)}，占比 ${(ratio * 100).toFixed(1)}%）` +
-          ` → 修为 +${expReward}｜灵石 +${stoneReward}`,
+          `· ${pl.userName}（伤害 ${formatCompact(pt.damage)}，占比 ${(ratio * 100).toFixed(1)}%）` +
+          ` → 修为 +${formatCompact(expReward)}｜灵石 +${formatCompact(stoneReward)}`,
         )
       } catch (e: any) {
         logger.warn(`世界 BOSS「${boss.name}」参与者 uid=${pt.uid} 奖励发放失败: ${e?.message ?? e}`)
@@ -225,7 +226,7 @@ async function settleWorldBossKill(
       }
     }
 
-    const head = `🎉 击杀 ${boss.name}！（${bossLv?.name ?? '?'}｜参战 ${parts.length} 人｜总伤害 ${Math.floor(totalDmg)}）`
+    const head = `🎉 击杀 ${boss.name}！（${bossLv?.name ?? '?'}｜参战 ${parts.length} 人｜总伤害 ${formatCompact(totalDmg)}）`
     const rewardBlock = rewardLines.length ? ['参战者奖励：', ...rewardLines].join('\n') : ''
     return [head, rewardBlock, lastHitLine].filter(Boolean).join('\n')
   } finally {
@@ -264,7 +265,7 @@ export function registerBossCommands(ctx: Context) {
   ctx.command('创建世界boss', '生成BOSS', { authority: 5 })
     .action(async () => {
       const { name, level, maxHp } = await spawnWorldBoss(ctx)
-      return `👹 世界 BOSS「${name}」已生成（境界 ${getLevel(String(level))?.name}，HP ${maxHp}）`
+      return `👹 世界 BOSS「${name}」已生成（境界 ${getLevel(String(level))?.name}，HP ${formatCompact(maxHp)}）`
     })
 
   ctx.command('查看世界boss', '查看当前世界 BOSS')
@@ -273,7 +274,7 @@ export function registerBossCommands(ctx: Context) {
       const list = await ctx.database.get(TABLE.boss, {})
       if (!list.length) return '当前没有活跃的世界 BOSS'
       return '👹 世界 BOSS\n' + list.map((b, i) =>
-        `${i + 1}. ${b.name}（境界 ${getLevel(String(b.level))?.name}｜气血 ${b.hp}/${b.maxHp}，${formatPct(b.hp, b.maxHp)}%）`
+        `${i + 1}. ${b.name}（境界 ${getLevel(String(b.level))?.name}｜气血 ${formatCompact(b.hp)}/${formatCompact(b.maxHp)}，${formatPct(b.hp, b.maxHp)}%）`
       ).join('\n')
     })
 
@@ -326,10 +327,10 @@ export function registerBossCommands(ctx: Context) {
           ? await settleWorldBossKill(ctx, after, { uid: p.uid, name: me.name })
           : null
         if (settled) return settled
-        return `⚔️ 你对 ${boss.name} 造成 ${myDmg} 伤害，BOSS 已被击杀（由其他道友完成结算）`
+        return `⚔️ 你对 ${boss.name} 造成 ${formatCompact(myDmg)} 伤害，BOSS 已被击杀（由其他道友完成结算）`
       }
 
       // 未击杀
-      return `⚔️ 你对 ${boss.name} 造成 ${myDmg} 伤害，剩 ${after.hp}/${after.maxHp}（${formatPct(after.hp, after.maxHp)}%，你的累计：${Math.floor(myPart?.damage ?? myDmg)}）`
+      return `⚔️ 你对 ${boss.name} 造成 ${formatCompact(myDmg)} 伤害，剩 ${formatCompact(after.hp)}/${formatCompact(after.maxHp)}（${formatPct(after.hp, after.maxHp)}%，你的累计：${formatCompact(myPart?.damage ?? myDmg)}）`
     })
 }

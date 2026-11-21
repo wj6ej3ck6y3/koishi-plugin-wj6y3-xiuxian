@@ -135,6 +135,35 @@ export function formatPct(current: number, max: number): number {
   return Math.max(0, Math.min(100, Math.floor(current / max * 100)))
 }
 
+/** 国际单位制前缀（1000 进制），K 起至 Q（10^30） */
+const COMPACT_UNITS = ['', 'K', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y', 'R', 'Q'] as const
+
+/**
+ * 大数值缩写显示：
+ * - 小于 1000：原样整数（向下取整）
+ * - 1000 起只显示最大一档，保留 1 位小数（四舍五入），如 9521 → 9.5K、52174525 → 52.2M
+ * - 四舍五入后达 1000 则升档（999950 → 1.0M）
+ * - ≥ 1000Q 改用科学记号（2.5e33 → 2.5e33）
+ * 仅用于显示，不影响存储与计算。
+ */
+export function formatCompact(n: number): string {
+  if (!Number.isFinite(n)) return '0'
+  const sign = n < 0 ? '-' : ''
+  const abs = Math.abs(n)
+  if (abs < 1000) return sign + String(Math.floor(abs))
+  let idx = Math.min(Math.floor(Math.log10(abs) / 3), COMPACT_UNITS.length - 1)
+  // log10 浮点误差修正
+  while (idx > 1 && abs < 1000 ** idx) idx--
+  while (idx < COMPACT_UNITS.length - 1 && abs >= 1000 ** (idx + 1)) idx++
+  let scaled = Math.round(abs / 1000 ** idx * 10) / 10
+  if (scaled >= 1000 && idx < COMPACT_UNITS.length - 1) { idx++; scaled = Math.round(abs / 1000 ** idx * 10) / 10 }
+  if (scaled >= 1000) {
+    const [m, e] = abs.toExponential(1).split('e')
+    return `${sign}${m}e${e.replace('+', '')}`
+  }
+  return `${sign}${scaled.toFixed(1)}${COMPACT_UNITS[idx]}`
+}
+
 // ======================= 学习制核心 =======================
 
 export interface LearnedSkills {
@@ -422,7 +451,7 @@ export function checkBreakthrough(player: Player): BreakthroughCheck {
   return {
     nextLevelId: nextId, currentName: lv.name, rate,
     requirePill, big: isBig, expRequired, canBreak: hasExp,
-    message: hasExp ? undefined : `修为不足（${Math.floor(player.exp)}/${expRequired}）`,
+    message: hasExp ? undefined : `修为不足（${formatCompact(player.exp)}/${formatCompact(expRequired)}）`,
   }
 }
 
@@ -688,7 +717,7 @@ export function simulateBattle(a: CombatUnit, b: CombatUnit, maxRound = 30): {
     if (action.kind === 'basic') {
       const { dmg, crit } = calcOneHit(att, def, 1, 1)
       def.hp = Math.max(0, def.hp - dmg)
-      log.push({ round, text: `${att.name} 攻击 ${def.name} 造成 ${dmg}${crit ? '（暴击！）' : ''}，剩 ${def.hp}/${def.maxhp}` })
+      log.push({ round, text: `${att.name} 攻击 ${def.name} 造成 ${formatCompact(dmg)}${crit ? '（暴击！）' : ''}，剩 ${formatCompact(def.hp)}/${formatCompact(def.maxhp)}` })
       if (att.lifesteal && att.lifesteal > 0) {
         const heal = Math.floor(dmg * att.lifesteal)
         if (heal > 0) att.hp = Math.min(att.maxhp, att.hp + heal)
@@ -724,7 +753,7 @@ export function simulateBattle(a: CombatUnit, b: CombatUnit, maxRound = 30): {
       const mul = Number(st.atkValue) || 0
       const first = calcOneHit(att, def, mul, 0.5)
       def.hp = Math.max(0, def.hp - first.dmg)
-      log.push({ round, text: `${att.name} 施展「${st.name}」造成 ${first.dmg}${first.crit ? '（暴击！）' : ''} 伤害，剩 ${def.hp}/${def.maxhp}` })
+      log.push({ round, text: `${att.name} 施展「${st.name}」造成 ${formatCompact(first.dmg)}${first.crit ? '（暴击！）' : ''} 伤害，剩 ${formatCompact(def.hp)}/${formatCompact(def.maxhp)}` })
 
       if (st.turnCost && st.turnCost > 1) {
         def.dotList = def.dotList ?? []
@@ -755,13 +784,13 @@ export function simulateBattle(a: CombatUnit, b: CombatUnit, maxRound = 30): {
       if (crit) anyCrit = true
     }
     def.hp = Math.max(0, def.hp - totalDmg)
-    log.push({ round, text: `${att.name} 施展「${st.name}」（${values.length} 段）造成 ${totalDmg} 伤害${anyCrit ? '（暴击！）' : ''}，剩 ${def.hp}/${def.maxhp}` })
+    log.push({ round, text: `${att.name} 施展「${st.name}」（${values.length} 段）造成 ${formatCompact(totalDmg)} 伤害${anyCrit ? '（暴击！）' : ''}，剩 ${formatCompact(def.hp)}/${formatCompact(def.maxhp)}` })
 
     if (st.lifestealPct) {
       const heal = Math.floor(totalDmg * st.lifestealPct)
       if (heal > 0) {
         att.hp = Math.min(att.maxhp, att.hp + heal)
-        log.push({ round, text: `${att.name} 吸取 ${heal} 气血` })
+        log.push({ round, text: `${att.name} 吸取 ${formatCompact(heal)} 气血` })
       }
     }
     return def.hp <= 0
@@ -787,7 +816,7 @@ export function simulateBattle(a: CombatUnit, b: CombatUnit, maxRound = 30): {
         for (const dot of u.dotList) {
           const { dmg, crit } = calcOneHit(dot.source, u, dot.multiplier, 0.5)
           u.hp = Math.max(0, u.hp - dmg)
-          log.push({ round: r, text: `${u.name} 受到「${dot.sourceName}」持续伤害 ${dmg}${crit ? '（暴击！）' : ''}，剩 ${u.hp}/${u.maxhp}` })
+          log.push({ round: r, text: `${u.name} 受到「${dot.sourceName}」持续伤害 ${formatCompact(dmg)}${crit ? '（暴击！）' : ''}，剩 ${formatCompact(u.hp)}/${formatCompact(u.maxhp)}` })
           dot.remainTurns -= 1
         }
         u.dotList = u.dotList.filter(d => d.remainTurns > 0)
@@ -1038,6 +1067,9 @@ const STAT_LABEL_MAP: Record<string, string> = {
   lifesteal: '吸血',
 }
 
+/** flat 加成中属于大数值、需缩写显示的属性（突破率等比率类保持原样） */
+const FLAT_COMPACT_STATS: ReadonlySet<string> = new Set(['atk', 'exp', 'hp', 'mp'])
+
 export function statLabel(stat: string): string {
   return STAT_LABEL_MAP[stat] ?? stat
 }
@@ -1050,7 +1082,9 @@ export function formatModifiers(mods: readonly Modifier[] | undefined, digits = 
   if (!mods || mods.length === 0) return empty
   return mods.map(m => {
     const isPct = (m.mode ?? 'pct') === 'pct'
-    const val = isPct ? `${(m.value * 100).toFixed(digits)}%` : `${m.value}`
+    const val = isPct
+      ? `${(m.value * 100).toFixed(digits)}%`
+      : (FLAT_COMPACT_STATS.has(m.stat) ? formatCompact(m.value) : `${m.value}`)
     return `${statLabel(m.stat)} +${val}`
   }).join('、')
 }

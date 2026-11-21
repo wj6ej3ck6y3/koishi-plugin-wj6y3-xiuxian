@@ -19,6 +19,7 @@ import {
   formatRemainTime,
   formatPct,
   resolveAtUid,
+  formatCompact,
 } from '../utils'
 
 // ======================= 宗门任务数值配置 =======================
@@ -129,7 +130,7 @@ export function registerSectCommands(ctx: Context) {
       const p = await requirePlayer(ctx, session)
       if (p.sectId && p.sectId > 0) return '你已加入宗门，需先退出'
       const need = 100000
-      if (!(await costStone(ctx, p.uid, need))) return `创建宗门需 ${need} 灵石，灵石不足`
+      if (!(await costStone(ctx, p.uid, need))) return `创建宗门需 ${formatCompact(need)} 灵石，灵石不足`
 
       const sectId = await getNextId(ctx, TABLE.sect, 'sectId')
       try {
@@ -173,8 +174,8 @@ export function registerSectCommands(ctx: Context) {
       return [
         `⛩️ ${sect.sectName}（编号 ${sect.sectId}）`,
         `宗主：${owner?.userName ?? '未知'}`,
-        `建设度：${sect.sectScale}   可用灵石：${sect.sectUsedStone}   资材：${sect.sectMaterials}`,
-        `成员：${members.length}   我的职位：${getPositionName(p.sectPosition)}   个人贡献：${p.sectContribution}`,
+        `建设度：${formatCompact(sect.sectScale)}   可用灵石：${formatCompact(sect.sectUsedStone)}   资材：${formatCompact(sect.sectMaterials)}`,
+        `成员：${members.length}   我的职位：${getPositionName(p.sectPosition)}   个人贡献：${formatCompact(p.sectContribution)}`,
       ].join('\n')
     })
 
@@ -182,7 +183,7 @@ export function registerSectCommands(ctx: Context) {
   ctx.command('宗门列表', '所有宗门').action(async () => {
     const sects = await ctx.database.get(TABLE.sect, {}, { sort: { sectScale: 'desc' }, limit: 30 })
     if (!sects.length) return '尚无宗门'
-    return '⛩️ 宗门列表\n' + sects.map((s, i) => `${i + 1}. ${s.sectName}（编号 ${s.sectId}）建设度 ${s.sectScale}`).join('\n')
+    return '⛩️ 宗门列表\n' + sects.map((s, i) => `${i + 1}. ${s.sectName}（编号 ${s.sectId}）建设度 ${formatCompact(s.sectScale)}`).join('\n')
   })
 
   // ================= 加入 =================
@@ -218,7 +219,7 @@ export function registerSectCommands(ctx: Context) {
       }))
       const contrib = actualSpend / 10
       await addPlayerContribution(ctx, p.uid, contrib)
-      return `💎 捐献 ${actualSpend} 灵石，建设度 +${actualSpend}，个人贡献 +${contrib}`
+      return `💎 捐献 ${formatCompact(actualSpend)} 灵石，建设度 +${formatCompact(actualSpend)}，个人贡献 +${formatCompact(contrib)}`
     })
 
   // ================= 成员 =================
@@ -229,7 +230,7 @@ export function registerSectCommands(ctx: Context) {
       const members = await ctx.database.get(TABLE.player, { sectId: p.sectId })
       const grouped: Record<number, string[]> = {}
       for (const m of members) {
-        (grouped[m.sectPosition] ??= []).push(`${m.userName}(${m.sectContribution})`)
+        (grouped[m.sectPosition] ??= []).push(`${m.userName}(${formatCompact(m.sectContribution)})`)
       }
       return Object.keys(grouped).sort().map(pos => {
         const n = Number(pos)
@@ -372,8 +373,8 @@ export function registerSectCommands(ctx: Context) {
       }
 
       return [
-        `🎁 ${getPositionName(p.sectPosition)}领取供奉：${amount}${extra}`,
-        `宗门灵石剩余：${Math.floor(sect.sectUsedStone - amount)}`,
+        `🎁 ${getPositionName(p.sectPosition)}领取供奉：${formatCompact(amount)}${extra}`,
+        `宗门灵石剩余：${formatCompact(sect.sectUsedStone - amount)}`,
       ].join('\n')
     })
 
@@ -391,22 +392,22 @@ export function registerSectCommands(ctx: Context) {
         const spend = Math.floor(count / rate) * rate
         if (spend < rate) return `至少需花费 ${rate} 贡献（${rate} 贡献 = 1 ${type}）`
         if (!(await subPlayerContributionIfEnough(ctx, p.uid, spend))) {
-          return `贡献不足（需 ${spend}，当前 ${current}）`
+          return `贡献不足（需 ${formatCompact(spend)}，当前 ${formatCompact(current)}）`
         }
         const gain = spend / rate
         if (type === '灵石') {
           await addStone(ctx, p.uid, gain)
-          return `💎 用 ${spend} 贡献兑换 ${gain} 灵石`
+          return `💎 用 ${formatCompact(spend)} 贡献兑换 ${formatCompact(gain)} 灵石`
         }
         await addPlayerExp(ctx, p.uid, gain)
-        return `🌱 用 ${spend} 贡献兑换 ${gain} 修为`
+        return `🌱 用 ${formatCompact(spend)} 贡献兑换 ${formatCompact(gain)} 修为`
       }
 
       if (type === '丹药') {
         const actualCount = count ?? 1
         const need = CONTRIB_PER_PILL * actualCount
         if (current < need) {
-          return `批量兑换 ${actualCount} 颗回复丹需 ${need} 贡献（当前 ${current}）`
+          return `批量兑换 ${actualCount} 颗回复丹需 ${formatCompact(need)} 贡献（当前 ${formatCompact(current)}）`
         }
 
         const allHealPills = Object.entries(data.pills)
@@ -423,7 +424,7 @@ export function registerSectCommands(ctx: Context) {
         if (pool.length === 0) return '暂无可兑换的回复丹药'
 
         if (!(await subPlayerContributionIfEnough(ctx, p.uid, need))) {
-          return `批量兑换 ${actualCount} 颗回复丹需 ${need} 贡献（当前 ${current}）`
+          return `批量兑换 ${actualCount} 颗回复丹需 ${formatCompact(need)} 贡献（当前 ${formatCompact(current)}）`
         }
 
         const got: Record<number, number> = {}
@@ -438,7 +439,7 @@ export function registerSectCommands(ctx: Context) {
         const detail = Object.entries(got)
           .map(([pidStr, num]) => `「${data.pills[pidStr]?.name ?? `#${pidStr}`}」×${num}`)
           .join('、')
-        return `💊 消耗 ${need} 贡献，获得：${detail}`
+        return `💊 消耗 ${formatCompact(need)} 贡献，获得：${detail}`
       }
       return '类型需为 灵石 / 修为 / 丹药'
     })
@@ -520,12 +521,12 @@ export function registerSectCommands(ctx: Context) {
         await recomputeAndSaveStats(ctx, p)
 
         const sectNote = sectOk
-          ? ` + ${cfg.rewardBuild} 建设度`
+          ? ` + ${formatCompact(cfg.rewardBuild)} 建设度`
           : '（宗门数据异常，未计入建设度）'
-        return `⚔️ 击败${boss.name}！奖励 ${cfg.rewardStone} 灵石 + ${cfg.rewardContrib} 贡献${sectNote}（你剩余气血 ${me.hp}/${me.maxhp}，${formatPct(me.hp, me.maxhp)}%）`
+        return `⚔️ 击败${boss.name}！奖励 ${formatCompact(cfg.rewardStone)} 灵石 + ${formatCompact(cfg.rewardContrib)} 贡献${sectNote}（你剩余气血 ${formatCompact(me.hp)}/${formatCompact(me.maxhp)}，${formatPct(me.hp, me.maxhp)}%）`
       }
 
       await recomputeAndSaveStats(ctx, p)
-      return `💥 挑战${boss.name}失败（你剩余气血 ${me.hp}/${me.maxhp}，${formatPct(me.hp, me.maxhp)}%），下次再来`
+      return `💥 挑战${boss.name}失败（你剩余气血 ${formatCompact(me.hp)}/${formatCompact(me.maxhp)}，${formatPct(me.hp, me.maxhp)}%），下次再来`
     })
 }

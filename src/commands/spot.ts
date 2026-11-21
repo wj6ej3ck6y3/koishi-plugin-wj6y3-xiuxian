@@ -5,7 +5,8 @@ import {
   requirePlayer, costStone, addItem, removeItem, getOrCreateBuff,
   getQiFlagBonus,
   formatRemainTime,
-  getQualityLabel
+  getQualityLabel,
+  formatCompact,
 } from '../utils'
 
 const PLOT_COST = (idx: number) => 1_000_000 * Math.pow(2, idx - 2)
@@ -23,7 +24,7 @@ export function registerSpotCommands(ctx: Context) {
       const p = await requirePlayer(ctx, session)
       if (p.blessedSpotFlag) return '你已开辟洞府'
       const need = 1_000_000
-      if (!(await costStone(ctx, p.uid, need))) return `开辟洞府需 ${need} 灵石`
+      if (!(await costStone(ctx, p.uid, need))) return `开辟洞府需 ${formatCompact(need)} 灵石`
       const spotName = name || `${p.userName}的洞府`
       await ctx.database.set(TABLE.player, { uid: p.uid }, {
         blessedSpotFlag: 1, blessedSpotName: spotName, plotCount: 1,
@@ -42,7 +43,7 @@ export function registerSpotCommands(ctx: Context) {
       const buff = await getOrCreateBuff(ctx, p.uid)
       if (buff.blessedSpot >= 5) return '灵气已达 5 级'
       const cost = SPOT_LEVEL_COST(buff.blessedSpot + 1)
-      if (!(await costStone(ctx, p.uid, cost))) return `需 ${cost} 灵石`
+      if (!(await costStone(ctx, p.uid, cost))) return `需 ${formatCompact(cost)} 灵石`
       await ctx.database.set(TABLE.buff, { uid: p.uid }, { blessedSpot: buff.blessedSpot + 1 })
       return `🏞️ 灵气升级至 ${buff.blessedSpot + 1} 级（闭关修为 +${(buff.blessedSpot + 1) * 5}%，灵田产量 +${(buff.blessedSpot + 1) * 50}%）`
     })
@@ -53,7 +54,7 @@ export function registerSpotCommands(ctx: Context) {
       if (!p.blessedSpotFlag) return '尚未开辟洞府'
       if (p.plotCount >= 999) return '灵田已达上限'
       const cost = PLOT_COST(p.plotCount + 1)
-      if (!(await costStone(ctx, p.uid, cost))) return `需 ${cost} 灵石`
+      if (!(await costStone(ctx, p.uid, cost))) return `需 ${formatCompact(cost)} 灵石`
       const nextIdx = p.plotCount + 1
       await ctx.database.set(TABLE.player, { uid: p.uid }, { plotCount: nextIdx })
       await ctx.database.upsert(TABLE.plot, [{

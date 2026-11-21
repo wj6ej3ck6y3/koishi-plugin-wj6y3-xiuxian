@@ -7,6 +7,7 @@ import {
   recordBattle,
   formatRemainTime,
   resolveAtUid,
+  formatCompact,
 } from '../utils'
 
 // ================= 内存 CD（模块级，键为 uid） =================
@@ -71,7 +72,7 @@ async function askAmount(
       continue
     }
     if (balance < amount) {
-      hint = `❌ 灵石不足（当前 ${balance}），请重新输入（回复「取消」退出）：`
+      hint = `❌ 灵石不足（当前 ${formatCompact(balance)}），请重新输入（回复「取消」退出）：`
       continue
     }
     return amount
@@ -118,7 +119,7 @@ export function registerGambleCommands(ctx: Context) {
       const balance = await getStone(ctx, p.uid)
       if (balance <= 0) {
         gambleCd.delete(p.uid)
-        return `❌ 灵石不足（当前 ${balance} 灵石，最低下注 1）`
+        return `❌ 灵石不足（当前 ${formatCompact(balance)} 灵石，最低下注 1）`
       }
 
       const amount = await askAmount(session, p.uid, balance)
@@ -146,7 +147,7 @@ export function registerGambleCommands(ctx: Context) {
 
       let result: string
       if (isTriple) {
-        result = `💀 豹子通杀！你输了 ${amount} 灵石`
+        result = `💀 豹子通杀！你输了 ${formatCompact(amount)} 灵石`
       } else {
         const isBig = sum >= 11
         const actualName = isBig ? '大' : '小'
@@ -154,9 +155,9 @@ export function registerGambleCommands(ctx: Context) {
         if (won) {
           const gain = Math.floor(amount * 1.9)
           await addStone(ctx, p.uid, gain)
-          result = `🎉 ${actualName}，你赢了 ${gain - amount} 灵石（共返还 ${gain} 灵石，含本金 ${amount}）`
+          result = `🎉 ${actualName}，你赢了 ${formatCompact(gain - amount)} 灵石（共返还 ${formatCompact(gain)} 灵石，含本金 ${formatCompact(amount)}）`
         } else {
-          result = `💸 ${actualName}，你输了 ${amount} 灵石`
+          result = `💸 ${actualName}，你输了 ${formatCompact(amount)} 灵石`
         }
       }
 
@@ -204,7 +205,7 @@ export function registerGambleCommands(ctx: Context) {
       })
       duelCd.set(p.uid, now + 60_000)
       // 过期邀请在发起 / 接受 / 拒绝时按 ts 过滤，并由每小时任务清理，无需额外定时器
-      return `🎲 向 ${targetPlayer.userName} 发起虚神界左轮对决（赌注 ${amount}）\n🔫 6 弹位随机装 1 发，先扣扳机者先，中弹者负\n请对方发送「接受对决」接受挑战（60 秒内），或发送「拒绝对决」拒绝`
+      return `🎲 向 ${targetPlayer.userName} 发起虚神界左轮对决（赌注 ${formatCompact(amount)}）\n🔫 6 弹位随机装 1 发，先扣扳机者先，中弹者负\n请对方发送「接受对决」接受挑战（60 秒内），或发送「拒绝对决」拒绝`
     })
 
   ctx.command('接受对决', '接受 PvP')
@@ -244,7 +245,7 @@ export function registerGambleCommands(ctx: Context) {
       const win = await getPlayer(ctx, winnerUid)
       if (win) await addStone(ctx, win.uid, v.amount * 2)
 
-      return `🔫 虚神界对决结束！\n${log.join('\n')}\n🏆 ${win?.userName ?? '?'} 获胜，赢得 ${v.amount * 2} 灵石`
+      return `🔫 虚神界对决结束！\n${log.join('\n')}\n🏆 ${win?.userName ?? '?'} 获胜，赢得 ${formatCompact(v.amount * 2)} 灵石`
     })
 
   ctx.command('拒绝对决', '拒绝虚神界对决')
@@ -258,7 +259,7 @@ export function registerGambleCommands(ctx: Context) {
 
       const ch = await getPlayer(ctx, v.challenger)
       const chName = ch?.userName ?? '对方'
-      return `✅ 已拒绝 ${chName} 的对决（赌注 ${v.amount} 灵石）`
+      return `✅ 已拒绝 ${chName} 的对决（赌注 ${formatCompact(v.amount)} 灵石）`
     })
 
   // ===== 抢灵石 =====
@@ -340,8 +341,8 @@ export function registerGambleCommands(ctx: Context) {
         `🏆 ${winnerPlayer.userName} 获胜`,
       ]
       if (realGain > 0) {
-        lines.push(`💎 抢走 ${loserPlayer.userName} 的 ${pctDisplay}% 灵石：${realGain}`)
-        lines.push(`🌱 ${loserPlayer.userName} 破财免灾，获得修为 +${expGain}`)
+        lines.push(`💎 抢走 ${loserPlayer.userName} 的 ${pctDisplay}% 灵石：${formatCompact(realGain)}`)
+        lines.push(`🌱 ${loserPlayer.userName} 破财免灾，获得修为 +${formatCompact(expGain)}`)
       } else {
         lines.push(`💸 灵石转移失败（余额变动/并发冲突），本次未结算灵石与修为`)
       }

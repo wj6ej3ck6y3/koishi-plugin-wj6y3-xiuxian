@@ -14,6 +14,7 @@ import {
   getBattleRecord,
   truncateDecimal,
   formatPct,
+  formatCompact,
   getAffectedRows,
   getSessionUid,
   isSameDay,
@@ -68,7 +69,7 @@ export function registerBaseCommands(ctx: Context, config: Config) {
         `🌱 ${player.userName}，你已踏入仙途！`,
         `灵根：${root.name}（${root.tier}）｜攻击倍率 ×${root.atk}`,
         `境界：${lv.name}`,
-        `气血 ${lv.hp} / 真元 ${lv.mp} / 攻击 ${lv.atk}`,
+        `气血 ${formatCompact(lv.hp)} / 真元 ${formatCompact(lv.mp)} / 攻击 ${formatCompact(lv.atk)}`,
         `发送「我的修仙信息」查看详情，发送「修仙签到」领取灵石。`,
       ].join('\n')
     })
@@ -97,7 +98,7 @@ export function registerBaseCommands(ctx: Context, config: Config) {
 
       const before = await getStone(ctx, p.uid)
       await addStone(ctx, p.uid, gain)
-      return `📅 签到成功，获得灵石 ×${gain}，当前灵石 ${before + gain}。`
+      return `📅 签到成功，获得灵石 ×${formatCompact(gain)}，当前灵石 ${formatCompact(before + gain)}。`
     })
 
   // ---------- 我的修仙信息 ----------
@@ -166,15 +167,15 @@ export function registerBaseCommands(ctx: Context, config: Config) {
       lines.push(`👤 道号：${p.userName}`)
       lines.push(`灵根：${root?.name ?? '?'}（${root?.tier ?? '?'}）`)
       lines.push(`境界：${lv.name}`)
-      lines.push(`战力：${p.power}`)
-      lines.push(`修为：${Math.floor(p.exp)}/${lv.expToNext}`)
-      lines.push(`灵石：${stone}`)
+      lines.push(`战力：${formatCompact(p.power)}`)
+      lines.push(`修为：${formatCompact(p.exp)}/${formatCompact(lv.expToNext)}`)
+      lines.push(`灵石：${formatCompact(stone)}`)
       lines.push('')
 
       lines.push('⚔️ 当前属性')
-      lines.push(`  气血 ${Math.floor(p.hp)}/${st.hp}（${formatPct(p.hp, st.hp)}%）`)
-      lines.push(`  真元 ${Math.floor(p.mp)}/${st.mp}（${formatPct(p.mp, st.mp)}%）`)
-      lines.push(`  攻击 ${st.atk}   防御 ${truncateDecimal(st.def)}%   速度 ${st.spd}`)
+      lines.push(`  气血 ${formatCompact(p.hp)}/${formatCompact(st.hp)}（${formatPct(p.hp, st.hp)}%）`)
+      lines.push(`  真元 ${formatCompact(p.mp)}/${formatCompact(st.mp)}（${formatPct(p.mp, st.mp)}%）`)
+      lines.push(`  攻击 ${formatCompact(st.atk)}   防御 ${truncateDecimal(st.def)}%   速度 ${formatCompact(st.spd)}`)
       lines.push(`  会心 ${(st.crit * 100).toFixed(1)}%   暴伤 ${(st.critDmg * 100).toFixed(0)}%   穿透 ${(st.pen * 100).toFixed(1)}%`)
       lines.push('')
 
@@ -229,7 +230,7 @@ export function registerBaseCommands(ctx: Context, config: Config) {
       if (p.sectId && p.sectId > 0) {
         const [sect] = await ctx.database.get(TABLE.sect, { sectId: p.sectId })
         if (sect) {
-          sectLine = `${sect.sectName}（${getPositionName(p.sectPosition)}）  贡献 ${p.sectContribution}`
+          sectLine = `${sect.sectName}（${getPositionName(p.sectPosition)}）  贡献 ${formatCompact(p.sectContribution)}`
         } else {
           sectLine = `数据异常（编号 ${p.sectId}）`
         }
@@ -244,7 +245,7 @@ export function registerBaseCommands(ctx: Context, config: Config) {
   ctx.command('灵石', '查看灵石')
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
-      return `💰 你当前拥有灵石 ${await getStone(ctx, p.uid)}。`
+      return `💰 你当前拥有灵石 ${formatCompact(await getStone(ctx, p.uid))}。`
     })
 
   // ---------- 查看战斗详情 ----------
@@ -289,11 +290,11 @@ export function registerBaseCommands(ctx: Context, config: Config) {
       const cost = 50_000 * lvNum
 
       if (!(await costStone(ctx, p.uid, cost))) {
-        return `💎 灵石不足：修改道号需 ${cost} 灵石（50000 × 境界 ${lvNum}），当前 ${await getStone(ctx, p.uid)}`
+        return `💎 灵石不足：修改道号需 ${formatCompact(cost)} 灵石（50000 × 境界 ${lvNum}），当前 ${formatCompact(await getStone(ctx, p.uid))}`
       }
 
       await ctx.database.set(TABLE.player, { uid: p.uid }, { userName: name })
-      return `✅ 道号已更改为「${name}」（消耗 ${cost} 灵石）`
+      return `✅ 道号已更改为「${name}」（消耗 ${formatCompact(cost)} 灵石）`
     })
 
   // ---------- 排行榜 ----------
@@ -309,12 +310,12 @@ export function registerBaseCommands(ctx: Context, config: Config) {
         const nameOf = new Map(players.map(pl => [pl.uid, pl.userName]))
         const rows = top.filter(t => nameOf.has(t.uid)).slice(0, limit)
         return '💎 灵石排行榜 TOP10\n' + rows
-          .map((r, i) => `${i + 1}. ${nameOf.get(r.uid)} - ${r.value}`).join('\n')
+          .map((r, i) => `${i + 1}. ${nameOf.get(r.uid)} - ${formatCompact(r.value)}`).join('\n')
       }
       if (type === '战力') {
         const rows = await ctx.database.get(TABLE.player, {}, { sort: { power: 'desc' }, limit })
         return '⚔️ 战力排行榜 TOP10\n' + rows
-          .map((r, i) => `${i + 1}. ${r.userName} - ${r.power}`).join('\n')
+          .map((r, i) => `${i + 1}. ${r.userName} - ${formatCompact(r.power)}`).join('\n')
       }
       // 境界 ID 以字符串存储，数据库无法按数值排序：取全部玩家的必要字段后按「数字境界 → 修为」排序
       const rows = await ctx.database.get(TABLE.player, {}, ['uid', 'userName', 'level', 'exp'])
