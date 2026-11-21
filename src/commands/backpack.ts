@@ -1,17 +1,25 @@
-import { Context } from 'koishi'
+import { $, Context, Session } from 'koishi'
 import { data } from '../data'
 import { TABLE } from '../models'
+import type { ShenTongEntry } from '../types'
 import {
-  requirePlayer, addItem, removeItem, getBuff, refreshPlayerStats,
-  getLearnedSkills,
+  requirePlayer, addItem, removeItem, getOrCreateBuff, recomputeAndSaveStats,
+  getLearnedSkillsAndMigrate,
   isOneShotBreakthroughPill, isOneShotPillUsed,
   getOneShotBreakthroughValue,
+  getPillUseLimit, getPillUsedCount, addPillUsedCount,
+  addPlayerExp,
+  setEquipSlot, getEquippedIds, EquipSlot,
+  getFuxiuBonus,
+  floorRow,
   getQualityLabel,
   getTierRank,
   statLabel,
+  formatModifiers,
   ALL_ITEM_TABLES,
   findItemInBackpack,
   formatPct,
+  DUE_PILL_ID,
 } from '../utils'
 
 
@@ -27,29 +35,35 @@ const FUXIU_EFFECT_LABEL: Record<string, string> = {
   poison: '中毒',
 }
 
-/** 把 modifiers 数组格式化为 "气血 +3%、攻击 +5%" */
-function formatModifiers(mods: any[] | undefined, isFlat: boolean = false): string {
-  if (!mods || mods.length === 0) return '无'
-  return mods.map(m => {
-    const isPct = (m.mode ?? 'pct') === 'pct'
-    const val = isPct ? `${(m.value * 100).toFixed(isFlat ? 2 : 0)}%` : `${m.value}`
-    return `${statLabel(m.stat)} +${val}`
-  }).join('、')
+/** 辅修的实际加成文字：已实作的效果显示对应属性加成，尚未实作的显示「无加成」 */
+function formatFuxiuBonus(entry: any): string {
+  const b = getFuxiuBonus(entry)
+  if (!b) return '无加成'
+  return `${statLabel(b.stat)} +${(b.value * 100).toFixed(0)}%`
+}
+
+/**
+ * 神通冷却的实际效果：施放后 cd = turnCost，每回合结束减 1，>0 时不可施放，
+ * 因此施放后有 turnCost - 1 个回合无法再次施放（turnCost ≤ 1 即无冷却）。
+ */
+function formatShenTongCooldown(st: ShenTongEntry): string {
+  const cd = (st.turnCost ?? 0) - 1
+  return cd > 0 ? `施放后 ${cd} 回合不可再施放` : '无冷却'
 }
 
 /** 把神通的战斗效果格式化为多行字符串（供「我的神通」和「查看修仙界物品」共用） */
-function formatShenTongEffect(st: any): string[] {
+function formatShenTongEffect(st: ShenTongEntry | undefined): string[] {
   if (!st) return []
   const lines: string[] = []
   const mpPart = `耗真元 ${(st.mpCost * 100).toFixed(0)}%`
   const ratePart = `命中 ${st.rate}%`
+  const cdPart = formatShenTongCooldown(st)
 
   // type 1：单次伤害
   if (st.type === 1) {
     const values = Array.isArray(st.atkValue) ? st.atkValue : [st.atkValue]
     const totalMul = values.reduce((s: number, v: number) => s + v, 0)
     const segPart = values.length > 1 ? `（${values.length} 段）` : ''
-    const cdPart = st.turnCost && st.turnCost > 0 ? `冷却 ${st.turnCost} 回合` : '无冷却'
     lines.push(`  · 总伤害 ×${totalMul.toFixed(2)}${segPart}`)
     lines.push(`  · ${mpPart}｜${ratePart}｜${cdPart}`)
     return lines
@@ -58,9 +72,8 @@ function formatShenTongEffect(st: any): string[] {
   // type 2：持续伤害
   if (st.type === 2) {
     const per = Number(st.atkValue)
-    const total = per * (st.turnCost ?? 1)
     lines.push(`  · 每回合伤害 ×${per.toFixed(2)}，持续 ${st.turnCost} 回合`)
-    lines.push(`  · ${mpPart}｜${ratePart}`)
+    lines.push(`  · ${mpPart}｜${ratePart}｜${cdPart}`)
     return lines
   }
 
@@ -69,10 +82,10 @@ function formatShenTongEffect(st: any): string[] {
     const buffVal = ((st.buffValue ?? 0) * 100).toFixed(0)
     let buffDesc = ''
     if (st.buffType === 1) buffDesc = `攻击提升 ${buffVal}%`
-    else if (st.buffType === 2) buffDesc = `减伤提升 ${buffVal}%`
+    else if (st.buffType === 2) buffDesc = `减伤提升 ${buffVal}%（原减伤 × ${buffVal}%）`
     else buffDesc = `增益 ${buffVal}%`
     lines.push(`  · ${buffDesc}｜持续 ${st.turnCost} 回合`)
-    lines.push(`  · ${mpPart}｜${ratePart}`)
+    lines.push(`  · ${mpPart}｜${ratePart}｜${cdPart}`)
     return lines
   }
 
@@ -82,7 +95,6 @@ function formatShenTongEffect(st: any): string[] {
     const totalMul = values.reduce((s: number, v: number) => s + v, 0)
     const segPart = values.length > 1 ? `（${values.length} 段）` : ''
     const lsPart = st.lifestealPct ? `吸血 ${(st.lifestealPct * 100).toFixed(0)}%` : ''
-    const cdPart = st.turnCost && st.turnCost > 0 ? `冷却 ${st.turnCost} 回合` : '无冷却'
     lines.push(`  · 总伤害 ×${totalMul.toFixed(2)}${segPart}${lsPart ? '｜' + lsPart : ''}`)
     lines.push(`  · ${mpPart}｜${ratePart}｜${cdPart}`)
     return lines
@@ -148,7 +160,8 @@ function segmentByTier<T>(
 }
 
 /** 依序发送多段消息 */
-async function sendSegments(session: any, segments: string[]) {
+async function sendSegments(session: Session | undefined, segments: string[]) {
+  if (!session) return
   for (const seg of segments) await session.send(seg)
 }
 
@@ -185,6 +198,22 @@ const BACKPACK_TYPE_ORDER: Array<[string, string]> = [
   ['herb', '药材'], ['furnace', '炼丹炉'], ['qiflag', '聚灵旗'],
 ]
 
+/** 「我的背包」分类参数 → 要显示的物品类型（_type）集合，简繁均可 */
+const BACKPACK_CATEGORY_MAP: Record<string, { label: string; types: string[] }> = {
+  '武器': { label: '武器', types: ['weapon'] },
+  '防具': { label: '防具', types: ['armor'] },
+  '功法': { label: '功法', types: ['gongfa', 'fuxiu'] },
+  '神通': { label: '神通', types: ['shentong'] },
+  '丹药': { label: '丹药', types: ['pill'] },
+  '丹藥': { label: '丹药', types: ['pill'] },
+  '药材': { label: '药材', types: ['herb'] },
+  '藥材': { label: '药材', types: ['herb'] },
+  '聚灵旗': { label: '聚灵旗', types: ['qiflag'] },
+  '聚靈旗': { label: '聚灵旗', types: ['qiflag'] },
+  '炼丹炉': { label: '炼丹炉', types: ['furnace'] },
+  '煉丹爐': { label: '炼丹炉', types: ['furnace'] },
+}
+
 export function findItemByName(name: string): [string, any] | null {
   const all = ALL_ITEM_TABLES()
   for (const [id, v] of Object.entries(all)) {
@@ -193,50 +222,18 @@ export function findItemByName(name: string): [string, any] | null {
   return null
 }
 
-// ===== 装备写入的统一入口 =====
-/**
- * 只更新 buff 表里指定的单个槽位字段，绝不触及背包（back 表）。
- * 完整字段写回：即使 adapter 是"整行替换"也不会丢其它字段。
- */
-async function equipSlot(
-  ctx: Context,
-  uid: number,
-  slot: 'faqiBuff' | 'armorBuff' | 'furnaceBuff' | 'qiFlagBuff',
-  goodsId: number,
-) {
-  const buff = await getBuff(ctx, uid)
-  if ((buff as any)[slot] === goodsId) return
-
-  await ctx.database.upsert(TABLE.buff, [{
-    uid,
-    mainBuff: buff.mainBuff ?? 0,
-    secBuff: buff.secBuff ?? 0,
-    subBuff: buff.subBuff ?? 0,
-    faqiBuff: buff.faqiBuff ?? 0,
-    armorBuff: buff.armorBuff ?? 0,
-    atkBuff: buff.atkBuff ?? 0,
-    blessedSpot: buff.blessedSpot ?? 0,
-    furnaceBuff: buff.furnaceBuff ?? 0,
-    qiFlagBuff: buff.qiFlagBuff ?? 0,
-    [slot]: goodsId,
-  }], ['uid'])
-}
-
 export function registerBackpackCommands(ctx: Context) {
   // ===== 我的背包 =====
-  ctx.command('我的背包', '查看背包')
+  ctx.command('我的背包 [category:string]', '查看背包，可选分类：武器/防具/功法/神通/丹药/药材/聚灵旗/炼丹炉')
     .alias('我的物品').alias('修仙物品').alias('查看背包')
-    .action(async ({ session }) => {
+    .action(async ({ session }, category) => {
       const p = await requirePlayer(ctx, session)
       const items = await ctx.database.get(TABLE.back, { uid: p.uid })
       const visible = items.filter(it => (it.goodsNum ?? 0) > 0)
       if (!visible.length) return '背包空空如也'
 
-      const buff = await getBuff(ctx, p.uid)
-      const equippedIds = new Set(
-        [buff.faqiBuff, buff.armorBuff, buff.furnaceBuff, buff.qiFlagBuff]
-          .filter(id => !!id),
-      )
+      const buff = await getOrCreateBuff(ctx, p.uid)
+      const equippedIds = getEquippedIds(buff)
 
       const all = ALL_ITEM_TABLES()
       const nameOf = (it: any) => (all[it.goodsId] as any)?.name ?? `未知#${it.goodsId}`
@@ -251,10 +248,20 @@ export function registerBackpackCommands(ctx: Context) {
       }
 
       const known = new Set(BACKPACK_TYPE_ORDER.map(([t]) => t))
-      const types: Array<[string, string]> = [...BACKPACK_TYPE_ORDER, ['__other', '其他']]
-      const segments: string[] = [`🎒 ${p.userName} 的背包（共 ${visible.length} 类）`]
+      const cat = category ? BACKPACK_CATEGORY_MAP[category.trim()] : undefined
+      // 分类参数命中则只显示该分类；未输入或参数无效 → 显示全部
+      let pool = visible
+      let types: Array<[string, string]> = [...BACKPACK_TYPE_ORDER, ['__other', '其他']]
+      if (cat) {
+        pool = visible.filter(it => cat.types.includes((all[it.goodsId] as any)?._type))
+        if (!pool.length) return `背包中没有${cat.label}类道具`
+        types = BACKPACK_TYPE_ORDER.filter(([t]) => cat.types.includes(t))
+      }
+      const segments: string[] = [
+        `🎒 ${p.userName} 的背包${cat ? ' · ' + cat.label : ''}（共 ${pool.length} 类）`,
+      ]
       for (const [type, label] of types) {
-        const group = visible.filter(it => {
+        const group = pool.filter(it => {
           const t = (all[it.goodsId] as any)?._type
           return type === '__other' ? !known.has(t) : t === type
         })
@@ -273,9 +280,9 @@ export function registerBackpackCommands(ctx: Context) {
     .action(async ({ session }, slot) => {
       if (!slot) return '请输入槽位：武器 / 防具 / 炼丹炉 / 聚灵旗'
       const p = await requirePlayer(ctx, session)
-      const buff = await getBuff(ctx, p.uid)
+      const buff = await getOrCreateBuff(ctx, p.uid)
 
-      const map: Record<string, { key: 'faqiBuff' | 'armorBuff' | 'furnaceBuff' | 'qiFlagBuff'; label: string }> = {
+      const map: Record<string, { key: EquipSlot; label: string }> = {
         '武器': { key: 'faqiBuff', label: '武器' },
         '防具': { key: 'armorBuff', label: '防具' },
         '炼丹炉': { key: 'furnaceBuff', label: '炼丹炉' },
@@ -289,46 +296,43 @@ export function registerBackpackCommands(ctx: Context) {
       const curId = buff[target.key]
       if (!curId) return `你当前没有装备${target.label}`
 
-      await ctx.database.set(TABLE.buff, { uid: p.uid }, { [target.key]: 0 } as any)
-      await refreshPlayerStats(ctx, p)
+      await setEquipSlot(ctx, p.uid, target.key, 0)
+      await recomputeAndSaveStats(ctx, p)
 
       const all = ALL_ITEM_TABLES()
-      const name = all[curId]?.name ?? `#${curId}`
+      const name = (all[curId] as any)?.name ?? `#${curId}`
       return `📤 已卸下${target.label}「${name}」（物品仍在背包中）`
     })
 
-  // ===== 使用 =====
-  ctx.command('使用 <name:string> [count:number]', '使用 / 学习物品')
-    .action(async ({ session }, name, count = 1) => {
+  // ===== 使用（每次固定 1 份） =====
+  ctx.command('使用 <name:string>', '使用 / 学习物品（每次使用 1 份）')
+    .action(async ({ session }, name) => {
       if (!name) return '请输入要使用的物品名称'
       const p = await requirePlayer(ctx, session)
       const found = await findItemInBackpack(ctx, p.uid, name)
       if (!found) return `背包中未找到「${name}」`
       const [idStr, meta] = found
       const goodsId = parseInt(idStr, 10)
-      const rows = await ctx.database.get(TABLE.back, { uid: p.uid, goodsId })
-      if (!rows[0] || rows[0].goodsNum < count) return `物品数量不足`
-      const backRow = rows[0]
 
       // ===== 学习制：功法 / 辅修 / 神通 =====
       if (meta._type === 'gongfa' || meta._type === 'fuxiu' || meta._type === 'shentong') {
         const typeName = meta._type === 'gongfa' ? '功法'
           : meta._type === 'fuxiu' ? '辅修功法' : '神通'
-        const learned = await getLearnedSkills(ctx, p.uid)
+        const learned = await getLearnedSkillsAndMigrate(ctx, p.uid)
         const learnedArr = meta._type === 'gongfa' ? learned.gongfa
           : meta._type === 'fuxiu' ? learned.fuxiu : learned.shentong
         if (learnedArr.includes(goodsId)) return `已学会「${meta.name}」，无需重复学习`
 
+        // 先扣物品，扣除成功才学习
+        if (!(await removeItem(ctx, p.uid, goodsId, 1))) return '物品数量不足'
         await ctx.database.upsert(TABLE.skill, [{ uid: p.uid, skillId: goodsId }], ['uid', 'skillId'])
-        await removeItem(ctx, p.uid, goodsId, count)
-        await refreshPlayerStats(ctx, p)
+        await recomputeAndSaveStats(ctx, p)
         return `📖 成功学习${typeName}「${meta.name}」！`
       }
 
       // ===== 丹药 =====
       if (meta._type === 'pill') {
-        const isDue = meta.modifiers?.some((m: any) => m.stat === 'breakthroughLoss')
-        if (isDue) return '「渡厄丹」需在「渡厄突破」时自动使用，请直接发送「渡厄突破」'
+        if (goodsId === DUE_PILL_ID) return '「渡厄丹」需在「渡厄突破」时自动使用，请直接发送「渡厄突破」'
 
         if (isOneShotBreakthroughPill(meta)) {
           if (await isOneShotPillUsed(ctx, p.uid, goodsId)) {
@@ -346,11 +350,11 @@ export function registerBackpackCommands(ctx: Context) {
           const targetLv = data.levels[targetLevelId]
           if (!targetLv) return '当前已是最高境界，无需服用突破丹'
 
+          if (!(await removeItem(ctx, p.uid, goodsId, 1))) return '物品数量不足'
           await ctx.database.upsert(TABLE.pillUsed, [{
             uid: p.uid, pillId: goodsId,
             targetLevelId, usedAt: new Date(),
           }], ['uid', 'pillId'])
-          await removeItem(ctx, p.uid, goodsId, 1)
 
           const btValue = getOneShotBreakthroughValue(meta)
           return `💊 服用「${meta.name}」，突破「${targetLv.name}」时成功率 +${btValue}%（成功突破此境界前一直有效，飞升后重置）`
@@ -359,79 +363,69 @@ export function registerBackpackCommands(ctx: Context) {
         if (meta.realm && parseInt(p.level, 10) < Number(meta.realm)) {
           return `境界不足，需达到「${data.levels[String(meta.realm)]?.name}」`
         }
-        const dailyLimit = (meta as any).dailyLimit ?? (meta as any).dayNum as number | undefined
-        const rawTotalLimit = (meta as any).totalStock ?? (meta as any).allNum as number | undefined
-        const totalLimit = rawTotalLimit !== undefined && rawTotalLimit < 999999 ? rawTotalLimit : undefined
-        const perUse = (meta as any).usePerTime ?? (meta as any).maxUse ?? 999
-        const actualCount = Math.min(count, perUse)
-        if (actualCount < 1) return '请输入有效使用数量'
-        if (dailyLimit !== undefined && backRow.dayNum + actualCount > dailyLimit) {
-          return `「${meta.name}」今日使用次数已达上限（${dailyLimit}）`
-        }
-        if (totalLimit !== undefined && backRow.allNum + actualCount > totalLimit) {
-          return `「${meta.name}」累计使用次数已达上限（整局限 ${totalLimit}）`
+
+        // 整局限服次数（目前仅攻击丹每种 5 次），记录在独立表中，与背包行无关
+        const limit = getPillUseLimit(meta)
+        if (limit !== undefined) {
+          const used = await getPillUsedCount(ctx, p.uid, goodsId)
+          if (used >= limit) return `「${meta.name}」整局限服 ${limit} 次，你已服用 ${used} 次`
         }
 
-        for (let i = 0; i < actualCount; i++) {
-          for (const m of meta.modifiers ?? []) {
-            if (m.stat === 'exp' && m.mode === 'flat') {
-              p.exp += m.value
-            } else if (m.stat === 'breakthroughRate') {
-              p.levelUpRate = (p.levelUpRate || 0) + Math.round(m.value * 100)
-            } else if (m.stat === 'hp') {
-              // 回复气血（受 maxhp 封顶）
-              p.hp = Math.min(p.maxhp, p.hp + Math.floor(p.maxhp * (m.value ?? 0)))
+        // 先扣物品，扣除成功才生效
+        if (!(await removeItem(ctx, p.uid, goodsId, 1))) return '物品数量不足'
+        if (limit !== undefined) await addPillUsedCount(ctx, p.uid, goodsId, 1)
 
-              // ✅ 回复丹：按「回血比例的一半」回复真元（基于 maxmp，不扣当前气血是否满）
-              if (meta.tag === '回复丹') {
-                const isPct = (m.mode ?? 'pct') === 'pct'
-                const mpHeal = isPct
-                  ? Math.floor(p.maxmp * (m.value ?? 0) / 2)
-                  : Math.floor((m.value ?? 0) / 2)
-                if (mpHeal > 0) p.mp = Math.min(p.maxmp, p.mp + mpHeal)
-              }
-            } else if (m.stat === 'mp') {
-              p.mp = Math.min(p.maxmp, p.mp + Math.floor(p.maxmp * (m.value ?? 0)))
-            } else if (m.stat === 'atk' && m.mode === 'flat') {
-              const buffNow = await getBuff(ctx, p.uid)
-              const newBuff = {
-                uid: p.uid,
-                mainBuff: buffNow.mainBuff ?? 0,
-                secBuff: buffNow.secBuff ?? 0,
-                subBuff: buffNow.subBuff ?? 0,
-                faqiBuff: buffNow.faqiBuff ?? 0,
-                armorBuff: buffNow.armorBuff ?? 0,
-                atkBuff: (buffNow.atkBuff ?? 0) + m.value,
-                blessedSpot: buffNow.blessedSpot ?? 0,
-                furnaceBuff: buffNow.furnaceBuff ?? 0,
-                qiFlagBuff: buffNow.qiFlagBuff ?? 0,
-              }
-              await ctx.database.upsert(TABLE.buff, [newBuff], ['uid'])
+        let expGain = 0
+        let atkGain = 0
+        for (const m of meta.modifiers ?? []) {
+          if (m.stat === 'exp' && m.mode === 'flat') {
+            expGain += m.value
+          } else if (m.stat === 'breakthroughRate') {
+            p.levelUpRate = (p.levelUpRate || 0) + Math.round(m.value * 100)
+          } else if (m.stat === 'hp') {
+            // 回复气血（受 maxhp 封顶）
+            p.hp = Math.min(p.maxhp, p.hp + Math.floor(p.maxhp * (m.value ?? 0)))
+
+            // ✅ 回复丹：按「回血比例的一半」回复真元（基于 maxmp，不扣当前气血是否满）
+            if (meta.tag === '回复丹') {
+              const isPct = (m.mode ?? 'pct') === 'pct'
+              const mpHeal = isPct
+                ? Math.floor(p.maxmp * (m.value ?? 0) / 2)
+                : Math.floor((m.value ?? 0) / 2)
+              if (mpHeal > 0) p.mp = Math.min(p.maxmp, p.mp + mpHeal)
             }
+          } else if (m.stat === 'mp') {
+            p.mp = Math.min(p.maxmp, p.mp + Math.floor(p.maxmp * (m.value ?? 0)))
+          } else if (m.stat === 'atk' && m.mode === 'flat') {
+            atkGain += m.value
           }
         }
 
-        const hasLimits = dailyLimit !== undefined || totalLimit !== undefined
-        await removeItem(ctx, p.uid, goodsId, actualCount, hasLimits)
-        if (hasLimits) {
-          await ctx.database.set(TABLE.back, { uid: p.uid, goodsId }, {
-            dayNum: backRow.dayNum + actualCount,
-            allNum: backRow.allNum + actualCount,
-          })
+        if (atkGain) {
+          await getOrCreateBuff(ctx, p.uid)
+          const add = Math.floor(atkGain)
+          await ctx.database.set(TABLE.buff, { uid: p.uid }, row => ({ atkBuff: $.add(row.atkBuff, add) }))
         }
-        await ctx.database.set(TABLE.player, { uid: p.uid }, {
-          exp: p.exp, hp: p.hp, mp: p.mp, levelUpRate: p.levelUpRate,
-        })
-        await refreshPlayerStats(ctx, p)
+        await ctx.database.set(TABLE.player, { uid: p.uid }, floorRow(TABLE.player, {
+          hp: p.hp, mp: p.mp, levelUpRate: p.levelUpRate,
+        }))
+        if (expGain) {
+          await addPlayerExp(ctx, p.uid, expGain)
+          p.exp += Math.floor(expGain)
+        }
+        await recomputeAndSaveStats(ctx, p)
 
         // ✅ 判断是不是回复类丹药
         const hasHpRecovery = (meta.modifiers ?? []).some((m: any) => m.stat === 'hp')
         const hasMpRecovery = (meta.modifiers ?? []).some((m: any) => m.stat === 'mp')
 
-        let msg = `✅ 使用了 ${actualCount} 个「${meta.name}」`
+        let msg = `✅ 使用了 1 个「${meta.name}」`
+        if (limit !== undefined) {
+          msg += `（整局已服 ${await getPillUsedCount(ctx, p.uid, goodsId)}/${limit} 次）`
+        }
         if (hasHpRecovery || hasMpRecovery) {
-          msg +=  `\n🩸 当前气血：${Math.floor(p.hp)}/${p.maxhp}（${formatPct(p.hp, p.maxhp)}%）` +
-                  `\n💧 当前真元：${Math.floor(p.mp)}/${p.maxmp}（${formatPct(p.mp, p.maxmp)}%）`
+          msg += `\n🩸 当前气血：${Math.floor(p.hp)}/${p.maxhp}（${formatPct(p.hp, p.maxhp)}%）` +
+            `\n💧 当前真元：${Math.floor(p.mp)}/${p.maxmp}（${formatPct(p.mp, p.maxmp)}%）`
         }
         return msg
       }
@@ -439,14 +433,14 @@ export function registerBackpackCommands(ctx: Context) {
       // ===== 武器 / 防具 =====
       if (meta._type === 'weapon' || meta._type === 'armor') {
         const slot = meta._type === 'weapon' ? 'faqiBuff' : 'armorBuff'
-        await equipSlot(ctx, p.uid, slot, goodsId)
-        await refreshPlayerStats(ctx, p)
+        await setEquipSlot(ctx, p.uid, slot, goodsId)
+        await recomputeAndSaveStats(ctx, p)
         return `⚔️ 已装备「${meta.name}」`
       }
 
       // ===== 聚灵旗 =====
       if (meta._type === 'qiflag') {
-        await equipSlot(ctx, p.uid, 'qiFlagBuff', goodsId)
+        await setEquipSlot(ctx, p.uid, 'qiFlagBuff', goodsId)
         const cultPct = ((meta.cultivateSpeed ?? 0) * 10).toFixed(0)
         const herbPct = ((meta.herbSpeed ?? 0) * 20).toFixed(0)
         return `🚩 已装备聚灵旗「${meta.name}」（闭关修为 +${cultPct}% / 灵田增速 +${herbPct}%）`
@@ -454,7 +448,7 @@ export function registerBackpackCommands(ctx: Context) {
 
       // ===== 炼丹炉 =====
       if (meta._type === 'furnace' || (meta as any).bonusQuantity !== undefined) {
-        await equipSlot(ctx, p.uid, 'furnaceBuff', goodsId)
+        await setEquipSlot(ctx, p.uid, 'furnaceBuff', goodsId)
         return `⚗️ 已装备炼丹炉「${meta.name}」（多产 ${meta.bonusQuantity ?? 0} 枚 / 成功率 +${((meta.bonusSuccess ?? 0) * 100).toFixed(0)}%）`
       }
 
@@ -465,20 +459,12 @@ export function registerBackpackCommands(ctx: Context) {
   ctx.command('我的功法', '查看已学功法/辅修')
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
-      const learned = await getLearnedSkills(ctx, p.uid)
-
-      // 格式化功法的加成描述
-      const formatMods = (mods: any[]) => {
-        if (!mods || mods.length === 0) return ''
-        return mods.map(m => {
-          // 处理百分比和固定值
-          const val = m.mode === 'flat' ? m.value : (m.value * 100).toFixed(0) + '%'
-          return `${statLabel(m.stat)} +${val}`
-        }).join('、')
-      }
+      const learned = await getLearnedSkillsAndMigrate(ctx, p.uid)
 
       // 格式化功法列表（带品阶），按品阶由低到高、大品阶分段
-      const buildSegments = (ids: number[], table: any, label: string): string[] => {
+      const buildSegments = (
+        ids: number[], table: Record<string, any>, label: string, bonusOf: (item: any) => string,
+      ): string[] => {
         const valid = ids.filter(id => table[String(id)])
         return segmentByTier(
           valid, id => id, id => table[String(id)].name,
@@ -486,17 +472,16 @@ export function registerBackpackCommands(ctx: Context) {
             const item = table[String(id)]
             const quality = getQualityLabel(id)
             const qualityStr = quality ? `[${quality}] ` : ''
-            const modStr = formatMods(item.modifiers)
             const desc = item.desc ? `（${item.desc}）` : ''
-            return `· ${qualityStr}${item.name}${desc}\n   加成：${modStr || '无'}`
+            return `· ${qualityStr}${item.name}${desc}\n   加成：${bonusOf(item)}`
           },
           (g, n) => `${label}${g ? ' · ' + g : ''}（${n}）`,
         )
       }
 
       const segments = [
-        ...buildSegments(learned.gongfa, data.gongfa, '📖 主功法'),
-        ...buildSegments(learned.fuxiu, data.fuxiu, '📚 辅修功法'),
+        ...buildSegments(learned.gongfa, data.gongfa, '📖 主功法', item => formatModifiers(item.modifiers)),
+        ...buildSegments(learned.fuxiu, data.fuxiu, '📚 辅修功法', item => formatFuxiuBonus(item)),
       ]
       if (!segments.length) return '尚未学习任何功法'
       await sendSegments(session, segments)
@@ -506,7 +491,7 @@ export function registerBackpackCommands(ctx: Context) {
   ctx.command('我的神通', '查看已学神通')
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
-      const learned = await getLearnedSkills(ctx, p.uid)
+      const learned = await getLearnedSkillsAndMigrate(ctx, p.uid)
       if (!learned.shentong.length) return '尚未学习任何神通'
       const valid = learned.shentong.filter(id => data.shentong[String(id)])
       if (!valid.length) return '尚未学习任何神通'
@@ -526,7 +511,7 @@ export function registerBackpackCommands(ctx: Context) {
   // ===== 查看物品 =====
   ctx.command('查看修仙物品 <query:string>', '查询物品详情')
     .alias('查看修仙物品信息').alias('查看物品').alias('物品查看').alias('查看修仙道具信息').alias('修仙道具信息').alias('查看修仙道具').alias('查看道具信息').alias('道具信息').alias('查看道具').alias('查看')
-    .action(async ({ session }, query) => {
+    .action(async (_, query) => {
       if (!query) return '请输入物品名称或编号'
       const all = ALL_ITEM_TABLES()
 
@@ -565,7 +550,7 @@ export function registerBackpackCommands(ctx: Context) {
       if (found._type === 'fuxiu') {
         const effName = FUXIU_EFFECT_LABEL[found.effect] ?? found.effect
         lines.push('类型：辅修功法（学习后永久累计加成）')
-        lines.push(`效果：${effName} +${found.value}${found.effect === 'lifesteal' || found.effect === 'poison' ? '%' : ''}%`)
+        lines.push(`效果：${effName} +${found.value}%`)
       }
 
       // ===== 神通 =====
@@ -595,14 +580,15 @@ export function registerBackpackCommands(ctx: Context) {
       }
 
       // ===== 药材 =====
+      // 数据格式：主药 [冷热, 类型, 药力] / 药引 [冷热, 类型, 药力] / 辅药 [类型, 药力]
       if (found._type === 'herb') {
         lines.push('类型：炼丹药材')
         if (found.tier) lines.push(`阶位：${found.tier} 阶`)
-        if (Array.isArray(found.main)) lines.push(`主药：${found.main[0] >= 0 ? '+' : ''}${found.main[0]} 温（需求数 ${found.main[1]} / 可炼上限 ${found.main[2]}）`)
-        if (Array.isArray(found.guide)) lines.push(`药引：${found.guide[0] >= 0 ? '+' : ''}${found.guide[0]} 温（需求数 ${found.guide[1]} / 可炼上限 ${found.guide[2]}）`)
+        if (Array.isArray(found.main)) lines.push(`主药：${found.main[0] >= 0 ? '+' : ''}${found.main[0]} 温（类型 ${found.main[1]} / 药力 ${found.main[2]}）`)
+        if (Array.isArray(found.guide)) lines.push(`药引：${found.guide[0] >= 0 ? '+' : ''}${found.guide[0]} 温（类型 ${found.guide[1]} / 药力 ${found.guide[2]}）`)
         if (Array.isArray(found.aux)) {
           const auxTypeLabel: Record<number, string> = { 3: '主药辅', 4: '药引辅', 6: '攻伐辅' }
-          lines.push(`辅药：${auxTypeLabel[found.aux[0]] ?? `类型 ${found.aux[0]}`}（需求数 ${found.aux[1]}）`)
+          lines.push(`辅药：${auxTypeLabel[found.aux[0]] ?? `类型 ${found.aux[0]}`}（药力 ${found.aux[1]}）`)
         }
       }
 
@@ -611,6 +597,9 @@ export function registerBackpackCommands(ctx: Context) {
       const hasRate = found.modifiers?.some((m: any) => m.stat === 'breakthroughRate')
       if (hasBT) lines.push('效果：大境界突破丹（整局限服一次，成功突破对应境界前一直有效，飞升后重置）')
       if (hasRate) lines.push('效果：通用突破丹（临时累积加成，突破成功后清零）')
+      if (found._type === 'pill' && getPillUseLimit(found) !== undefined) {
+        lines.push(`限制：每种整局限服 ${getPillUseLimit(found)} 次（飞升 / 重入仙途后重置）`)
+      }
 
       return lines.join('\n')
     })

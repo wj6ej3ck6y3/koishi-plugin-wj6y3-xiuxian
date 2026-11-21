@@ -1,12 +1,13 @@
 import { Context } from 'koishi'
 import {
-  requirePlayer, getStone, addStone, costStone,
-  computeStats, buildPlayerUnit, simulateBattle, refreshPlayerStats,
+  requirePlayer, getPlayer, getStone, addStone, costStone,
+  loadAndComputeStats, buildPlayerUnit, simulateBattle, recomputeAndSaveStats,
+  addPlayerExp,
+  isBadlyInjured,
   recordBattle,
   formatRemainTime,
   resolveAtUid,
 } from '../utils'
-import { TABLE } from '../models'
 
 // ================= 内存 CD（模块级，键为 uid） =================
 const gambleCd = new Map<number, number>()
@@ -34,6 +35,14 @@ export function cleanupGambleCds() {
   for (const [k, v] of robCd) if (v < now) robCd.delete(k)
   for (const [k, v] of duelCd) if (v < now) duelCd.delete(k)
   for (const [k, v] of duelPending) if (now - v.ts >= 60_000) duelPending.delete(k)
+}
+
+/** 插件卸载时清空全部内存状态（冷却 / 待接受的对决） */
+export function clearGambleState() {
+  gambleCd.clear()
+  duelCd.clear()
+  robCd.clear()
+  duelPending.clear()
 }
 
 /** 询问下注金额 */
@@ -145,7 +154,7 @@ export function registerGambleCommands(ctx: Context) {
         if (won) {
           const gain = Math.floor(amount * 1.9)
           await addStone(ctx, p.uid, gain)
-          result = `🎉 ${actualName}，你赢了 ${gain - amount} 灵石（含本金 ${amount}）`
+          result = `🎉 ${actualName}，你赢了 ${gain - amount} 灵石（共返还 ${gain} 灵石，含本金 ${amount}）`
         } else {
           result = `💸 ${actualName}，你输了 ${amount} 灵石`
         }
@@ -165,8 +174,8 @@ export function registerGambleCommands(ctx: Context) {
       if (targetUid === p.uid) return '不能与自己对决'
       if ((await getStone(ctx, p.uid)) < amount) return '灵石不足'
 
-      const targetRows = await ctx.database.get(TABLE.player, { uid: targetUid })
-      if (!targetRows[0]) return '对方尚未踏入仙途，无法对决'
+      const targetPlayer = await getPlayer(ctx, targetUid)
+      if (!targetPlayer) return '对方尚未踏入仙途，无法对决'
 
       const now = Date.now()
       for (const [k, v] of [...duelPending.entries()]) {
@@ -194,11 +203,8 @@ export function registerGambleCommands(ctx: Context) {
         ts: startTs,
       })
       duelCd.set(p.uid, now + 60_000)
-      setTimeout(() => {
-        const cur = duelPending.get(key)
-        if (cur && cur.ts === startTs) duelPending.delete(key)
-      }, 60_000)
-      return `🎲 向 ${targetRows[0].userName} 发起虚神界左轮对决（赌注 ${amount}）\n🔫 6 弹位随机装 1 发，先扣扳机者先，中弹者负\n请对方发送「接受对决」接受挑战（60 秒内），或发送「拒绝对决」拒绝`
+      // 过期邀请在发起 / 接受 / 拒绝时按 ts 过滤，并由每小时任务清理，无需额外定时器
+      return `🎲 向 ${targetPlayer.userName} 发起虚神界左轮对决（赌注 ${amount}）\n🔫 6 弹位随机装 1 发，先扣扳机者先，中弹者负\n请对方发送「接受对决」接受挑战（60 秒内），或发送「拒绝对决」拒绝`
     })
 
   ctx.command('接受对决', '接受 PvP')
@@ -211,8 +217,8 @@ export function registerGambleCommands(ctx: Context) {
       duelPending.delete(key)
 
       if (!(await costStone(ctx, p.uid, v.amount))) return '你灵石不足'
-      const ch = await ctx.database.get(TABLE.player, { uid: v.challenger })
-      if (!ch[0] || !(await costStone(ctx, ch[0].uid, v.amount))) {
+      const ch = await getPlayer(ctx, v.challenger)
+      if (!ch || !(await costStone(ctx, ch.uid, v.amount))) {
         await addStone(ctx, p.uid, v.amount)
         return '发起者灵石不足，对决取消'
       }
@@ -222,8 +228,8 @@ export function registerGambleCommands(ctx: Context) {
       let shooter = v.shooter
       let loserUid: number | null = null
       while (pos < 6) {
-        const ch2 = await ctx.database.get(TABLE.player, { uid: shooter })
-        const name = ch2[0]?.userName ?? `#${shooter}`
+        const shooterPlayer = await getPlayer(ctx, shooter)
+        const name = shooterPlayer?.userName ?? `#${shooter}`
         if (pos === v.bulletPos) {
           log.push(`💥 第 ${pos + 1} 发——子弹击中！${name} 输了！`)
           loserUid = shooter
@@ -235,10 +241,10 @@ export function registerGambleCommands(ctx: Context) {
       }
 
       const winnerUid = loserUid === v.challenger ? v.target : v.challenger
-      const win = await ctx.database.get(TABLE.player, { uid: winnerUid })
-      if (win[0]) await addStone(ctx, win[0].uid, v.amount * 2)
+      const win = await getPlayer(ctx, winnerUid)
+      if (win) await addStone(ctx, win.uid, v.amount * 2)
 
-      return `🔫 虚神界对决结束！\n${log.join('\n')}\n🏆 ${win[0]?.userName ?? '?'} 获胜，赢得 ${v.amount * 2} 灵石`
+      return `🔫 虚神界对决结束！\n${log.join('\n')}\n🏆 ${win?.userName ?? '?'} 获胜，赢得 ${v.amount * 2} 灵石`
     })
 
   ctx.command('拒绝对决', '拒绝虚神界对决')
@@ -250,8 +256,8 @@ export function registerGambleCommands(ctx: Context) {
       const [key, v] = entry
       duelPending.delete(key)
 
-      const ch = await ctx.database.get(TABLE.player, { uid: v.challenger })
-      const chName = ch[0]?.userName ?? '对方'
+      const ch = await getPlayer(ctx, v.challenger)
+      const chName = ch?.userName ?? '对方'
       return `✅ 已拒绝 ${chName} 的对决（赌注 ${v.amount} 灵石）`
     })
 
@@ -260,12 +266,7 @@ export function registerGambleCommands(ctx: Context) {
     .alias('打劫').alias('抢夺灵石')
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
-      {
-        const myThreshold = Math.max(1, Math.floor(p.maxhp * 0.01))
-        if (!Number.isFinite(p.hp) || p.hp < myThreshold) {
-          return `你身受重伤，无法打劫`
-        }
-      }
+      if (isBadlyInjured(p.hp, p.maxhp)) return `你身受重伤，无法打劫`
       const targetUid = await resolveAtUid(ctx, session)
       if (targetUid === null) return '请 @ 要打劫的人（对方需在本平台使用过 bot）'
       if (targetUid === p.uid) return '不能打劫自己'
@@ -275,24 +276,18 @@ export function registerGambleCommands(ctx: Context) {
       if (now < cd) return `打劫冷却中，还需 ${formatRemainTime(cd - now)}`
 
       // ✅ B4：所有前置校验通过后，才上 5 分钟 CD
-      const oppRows = await ctx.database.get(TABLE.player, { uid: targetUid })
-      const opp = oppRows[0]
+      const opp = await getPlayer(ctx, targetUid)
       if (!opp) return '对方尚未踏入仙途'
-      {
-        const oppThreshold = Math.max(1, Math.floor(opp.maxhp * 0.01))
-        if (!Number.isFinite(opp.hp) || opp.hp < oppThreshold) {
-          return `对方身受重伤，胜之不武`
-        }
-      }
+      if (isBadlyInjured(opp.hp, opp.maxhp)) return `对方身受重伤，胜之不武`
       const oppStone = await getStone(ctx, opp.uid)
       if (oppStone <= 0) return '对方身上没有灵石可抢'
 
       // ✅ B4：到这里才真正进入战斗流程，才上锁
       robCd.set(p.uid, now + ROB_CD_MS)
 
-      const myStats = await computeStats(ctx, p)
+      const myStats = await loadAndComputeStats(ctx, p)
       const myUnit = await buildPlayerUnit(ctx, p, myStats)
-      const oppStats = await computeStats(ctx, opp)
+      const oppStats = await loadAndComputeStats(ctx, opp)
       const oppUnit = await buildPlayerUnit(ctx, opp, oppStats)
 
       const r = simulateBattle(myUnit, oppUnit)
@@ -328,20 +323,14 @@ export function registerGambleCommands(ctx: Context) {
         realGain = actualGain
       }
 
-      if (realGain > 0) {
-        loserPlayer.exp = (loserPlayer.exp || 0) + expGain
-      }
-
       p.hp = myUnit.hp
       p.mp = myUnit.mp
       opp.hp = oppUnit.hp
       opp.mp = oppUnit.mp
-      await refreshPlayerStats(ctx, p)
-      await refreshPlayerStats(ctx, opp)
+      await recomputeAndSaveStats(ctx, p)
+      await recomputeAndSaveStats(ctx, opp)
       if (realGain > 0) {
-        await ctx.database.set(TABLE.player, { uid: loserPlayer.uid }, {
-          exp: loserPlayer.exp,
-        })
+        await addPlayerExp(ctx, loserPlayer.uid, expGain)
       }
 
       const lastLog = r.log.length ? r.log[r.log.length - 1].text : '（无战斗记录）'

@@ -1,5 +1,5 @@
-import { Context } from 'koishi'
-import { TABLE } from '../models'
+import { $, Context } from 'koishi'
+import { TABLE, BankRow } from '../models'
 import { requirePlayer, getStone, addStone, costStone, getAffectedRows } from '../utils'
 
 const LEVELS = [
@@ -12,18 +12,37 @@ const LEVELS = [
   { lv: 7, cap: 2_000_000_000, ratePerHour: 0.015, upFee: 200_000_000 },
 ]
 
+interface SettleResult { total: number; banked: number; direct: number }
+
+function levelOf(bank: BankRow) {
+  return LEVELS[bank.bankLevel - 1] ?? LEVELS[0]
+}
+
+/** 结息结果的说明文字（存灵石 / 取灵石 / 结算 / 升级共用） */
+function formatInterestLines(s: SettleResult, cap: number, header = `💹 结算利息 +${s.total}`): string[] {
+  if (s.total <= 0) return []
+  const lines = [header]
+  if (s.direct > 0) {
+    lines.push(`  · 存入灵庄 +${s.banked}（已达上限 ${cap}）`)
+    lines.push(`  · 直接到账 +${s.direct}`)
+  } else {
+    lines.push(`  · 全部存入灵庄 +${s.banked}`)
+  }
+  return lines
+}
+
 export function registerBankCommands(ctx: Context) {
   ctx.command('灵庄帮助', '灵庄帮助')
     .action(async () => [
-      '灵庄存灵石 [数量]  灵庄取灵石 [数量]',
+      '灵庄存灵石 <数量>  灵庄取灵石 <数量>',
       '灵庄结算  灵庄升级  灵庄信息',
     ].join('\n'))
 
   // ✅ B7：load 包 try/catch，并发 create 冲突时重读
-  async function load(ctx: Context, uid: number) {
+  async function load(ctx: Context, uid: number): Promise<BankRow> {
     const rows = await ctx.database.get(TABLE.bank, { uid })
     if (rows[0]) return rows[0]
-    const row = { uid, saveStone: 0, saveTime: new Date(), bankLevel: 1 }
+    const row: BankRow = { uid, saveStone: 0, saveTime: new Date(), bankLevel: 1 }
     try {
       await ctx.database.create(TABLE.bank, row)
       return row
@@ -35,25 +54,33 @@ export function registerBankCommands(ctx: Context) {
     }
   }
 
-  async function settle(ctx: Context, p: any, bank: any) {
-    if (bank.saveStone <= 0) return { total: 0, banked: 0, direct: 0 }
-    const cfg = LEVELS[bank.bankLevel - 1] ?? LEVELS[0]
+  /**
+   * 结息：以「saveTime 仍为读取时的值」作为条件更新（签到的写法），保证同一段时间只结息一次；
+   * 存款以 $.add 原子累加，溢出上限的利息直接发到灵石。成功时同步更新传入的 bank 对象。
+   */
+  async function settle(ctx: Context, uid: number, bank: BankRow): Promise<SettleResult> {
+    const none = { total: 0, banked: 0, direct: 0 }
+    if (bank.saveStone <= 0) return none
+    const cfg = levelOf(bank)
     const hours = (Date.now() - +new Date(bank.saveTime)) / 3600000
     const gain = Math.floor(bank.saveStone * cfg.ratePerHour * hours)
-    if (gain <= 0) return { total: 0, banked: 0, direct: 0 }
+    if (gain <= 0) return none
 
     // 先填满灵庄，溢出部分直接给玩家
     const room = Math.max(0, cfg.cap - bank.saveStone)
     const banked = Math.min(gain, room)
     const direct = gain - banked
 
+    const newTime = new Date()
+    const res = await ctx.database.set(TABLE.bank, { uid, saveTime: bank.saveTime }, row => ({
+      saveStone: $.add(row.saveStone, banked),
+      saveTime: newTime,
+    }))
+    if (getAffectedRows(res) === 0) return none // 已被其他请求结算
+
     bank.saveStone += banked
-    bank.saveTime = new Date()
-    await ctx.database.set(TABLE.bank, { uid: p.uid }, {
-      saveStone: bank.saveStone,
-      saveTime: bank.saveTime,
-    })
-    if (direct > 0) await addStone(ctx, p.uid, direct)
+    bank.saveTime = newTime
+    if (direct > 0) await addStone(ctx, uid, direct)
 
     return { total: gain, banked, direct }
   }
@@ -61,7 +88,8 @@ export function registerBankCommands(ctx: Context) {
   // ✅ B1：先按原始存款算利息 → 再存入 → 再区分利息能存多少
   ctx.command('灵庄存灵石 <amount:number>', '存灵石')
     .alias('存灵石').alias('存入灵石')
-    .action(async ({ session }, amount) => {
+    .action(async ({ session }, rawAmount) => {
+      const amount = Math.floor(Number(rawAmount))
       if (!amount || amount <= 0) return '请输入数量'
       const p = await requirePlayer(ctx, session)
 
@@ -71,7 +99,7 @@ export function registerBankCommands(ctx: Context) {
       }
 
       const bank = await load(ctx, p.uid)
-      const cfg = LEVELS[bank.bankLevel - 1] ?? LEVELS[0]
+      const cfg = levelOf(bank)
 
       // ① 用「原始存款」计算本次利息（新存入不参与这段计息）
       const oldSave = bank.saveStone
@@ -92,24 +120,21 @@ export function registerBankCommands(ctx: Context) {
       const banked = Math.min(gain, interestRoom)
       const direct = gain - banked
 
+      // 以 saveTime 作为本次结息的占用条件，存款原子累加；若并发下已被结息，退还本次存入的灵石
+      const newTime = new Date()
+      const res = await ctx.database.set(TABLE.bank, { uid: p.uid, saveTime: bank.saveTime }, row => ({
+        saveStone: $.add(row.saveStone, deposited + banked),
+        saveTime: newTime,
+      }))
+      if (getAffectedRows(res) === 0) {
+        if (deposited > 0) await addStone(ctx, p.uid, deposited)
+        return '灵庄状态已变化，请重试'
+      }
       bank.saveStone = saveAfterDeposit + banked
-      await ctx.database.set(TABLE.bank, { uid: p.uid }, {
-        saveStone: bank.saveStone,
-        saveTime: new Date(),
-      })
       if (direct > 0) await addStone(ctx, p.uid, direct)
 
       // ④ 输出
-      const lines: string[] = []
-      if (gain > 0) {
-        lines.push(`💹 结算利息 +${gain}`)
-        if (direct > 0) {
-          lines.push(`  · 存入灵庄 +${banked}（已达上限 ${cfg.cap}）`)
-          lines.push(`  · 直接到账 +${direct}`)
-        } else {
-          lines.push(`  · 全部存入灵庄 +${banked}`)
-        }
-      }
+      const lines = formatInterestLines({ total: gain, banked, direct }, cfg.cap)
 
       if (deposited === amount) {
         lines.push(`🏦 存入 ${amount} 灵石`)
@@ -124,37 +149,32 @@ export function registerBankCommands(ctx: Context) {
 
   ctx.command('灵庄取灵石 <amount:number>', '取灵石')
     .alias('取灵石').alias('取出灵石')
-    .action(async ({ session }, amount) => {
+    .action(async ({ session }, rawAmount) => {
+      const amount = Math.floor(Number(rawAmount))
       if (!amount || amount <= 0) return '请输入数量'
       const p = await requirePlayer(ctx, session)
       const bank = await load(ctx, p.uid)
-      const cfg = LEVELS[bank.bankLevel - 1] ?? LEVELS[0]
+      const cfg = levelOf(bank)
 
-      const s = await settle(ctx, p, bank)
+      const s = await settle(ctx, p.uid, bank)
+      const settleLines = formatInterestLines(s, cfg.cap)
 
-      const settleLines: string[] = []
-      if (s.total > 0) {
-        settleLines.push(`💹 结算利息 +${s.total}`)
-        if (s.direct > 0) {
-          settleLines.push(`  · 存入灵庄 +${s.banked}（已达上限 ${cfg.cap}）`)
-          settleLines.push(`  · 直接到账 +${s.direct}`)
-        } else {
-          settleLines.push(`  · 全部存入灵庄 +${s.banked}`)
-        }
+      // 条件扣减（签到的写法）：存款 ≥ amount 才扣减成功，成功后才发放灵石
+      const res = await ctx.database.set(TABLE.bank, {
+        uid: p.uid,
+        saveStone: { $gte: amount },
+      }, row => ({ saveStone: $.sub(row.saveStone, amount) }))
+      if (getAffectedRows(res) === 0) {
+        const [now] = await ctx.database.get(TABLE.bank, { uid: p.uid })
+        return [...settleLines, `⚠️ 存款不足（当前 ${now?.saveStone ?? bank.saveStone}，需 ${amount}）`].join('\n')
       }
-
-      if (bank.saveStone < amount) {
-        return [...settleLines, `⚠️ 存款不足（当前 ${bank.saveStone}，需 ${amount}）`].join('\n')
-      }
-
-      bank.saveStone -= amount
       await addStone(ctx, p.uid, amount)
-      await ctx.database.set(TABLE.bank, { uid: p.uid }, { saveStone: bank.saveStone })
+      const [after] = await ctx.database.get(TABLE.bank, { uid: p.uid })
 
       return [
         ...settleLines,
         `🏦 取出 ${amount} 灵石`,
-        `当前存款 ${bank.saveStone} / ${cfg.cap}`,
+        `当前存款 ${after?.saveStone ?? Math.max(0, bank.saveStone - amount)} / ${cfg.cap}`,
       ].join('\n')
     })
 
@@ -162,18 +182,12 @@ export function registerBankCommands(ctx: Context) {
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
       const bank = await load(ctx, p.uid)
-      const cfg = LEVELS[bank.bankLevel - 1] ?? LEVELS[0]
-      const s = await settle(ctx, p, bank)
+      const cfg = levelOf(bank)
+      const s = await settle(ctx, p.uid, bank)
 
       if (s.total === 0) return `🏦 当前存款 ${bank.saveStone}，本次无利息`
 
-      const lines = [`🏦 本次利息 +${s.total}`]
-      if (s.direct > 0) {
-        lines.push(`  · 存入灵庄 +${s.banked}（已达上限 ${cfg.cap}）`)
-        lines.push(`  · 灵石直接到账 +${s.direct}`)
-      } else {
-        lines.push(`  · 全部存入灵庄 +${s.banked}`)
-      }
+      const lines = formatInterestLines(s, cfg.cap, `🏦 本次利息 +${s.total}`)
       lines.push(`当前存款 ${bank.saveStone} / ${cfg.cap}`)
       return lines.join('\n')
     })
@@ -187,7 +201,11 @@ export function registerBankCommands(ctx: Context) {
       if (!next) return '已是最高等级'
       if (!(await costStone(ctx, p.uid, next.upFee))) return `需 ${next.upFee} 灵石`
 
-      const writeRes: any = await ctx.database.set(TABLE.bank, {
+      // 升级前先按旧等级结息，避免新利率追溯套用到之前的存款时间
+      const cfg = levelOf(bank)
+      const s = await settle(ctx, p.uid, bank)
+
+      const writeRes = await ctx.database.set(TABLE.bank, {
         uid: p.uid,
         bankLevel: bank.bankLevel,
       }, { bankLevel: next.lv })
@@ -196,17 +214,20 @@ export function registerBankCommands(ctx: Context) {
       // ✅ 只有明确「0 行修改」才判定并发冲突；-1 视为成功
       if (affected === 0) {
         await addStone(ctx, p.uid, next.upFee)
-        return '灵庄状态已变化，请重试'
+        return [...formatInterestLines(s, cfg.cap), '灵庄状态已变化，请重试'].join('\n')
       }
 
-      return `🏦 灵庄升级至 ${next.lv} 级（上限 ${next.cap}，时息 ${next.ratePerHour * 100}%）`
+      return [
+        ...formatInterestLines(s, cfg.cap, `💹 升级前先按 ${cfg.lv} 级利率结息 +${s.total}`),
+        `🏦 灵庄升级至 ${next.lv} 级（上限 ${next.cap}，时息 ${next.ratePerHour * 100}%）`,
+      ].join('\n')
     })
 
   ctx.command('灵庄信息', '查询存款信息').alias('查看灵庄').alias('灵庄')
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
       const bank = await load(ctx, p.uid)
-      const cfg = LEVELS[bank.bankLevel - 1]
+      const cfg = levelOf(bank)
       const next = LEVELS[bank.bankLevel]
       return [
         `🏦 灵庄等级：${bank.bankLevel} 级`,

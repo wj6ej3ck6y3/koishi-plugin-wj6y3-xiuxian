@@ -1,9 +1,13 @@
 import { Context } from 'koishi'
-import { data } from '../data'
+import { Config, getPluginConfig } from '../config'
+import { data, weightedPick } from '../data'
 import { TABLE } from '../models'
 import {
   requirePlayer, addStone, costStone, addItem,
-  rollSingleDrop, DropEntry,
+  addPlayerExp,
+  getBusyKind,
+  getDropCategoryWeights, rollDrops, mergeDrops, formatDropList,
+  isSameDay,
   formatRemainTime,
   getAffectedRows,
 } from '../utils'
@@ -22,34 +26,23 @@ function buildAllTasks(): Array<{ key: string; cat: string; name: string; task: 
   return all
 }
 
-function getCategoryWeights(ctx: Context): Record<string, number> {
-  const w = (ctx as any).config?.bountyDropCategoryWeights
-  if (w && typeof w === 'object' && Object.keys(w).length > 0) return w
-  return {
-    pill: 20, craftPill: 8, herb: 25, weapon: 12, armor: 8,
-    gongfa: 10, shentong: 10, fuxiu: 3, qiFlag: 2, furnace: 2,
-  }
+/** 解析悬赏令键「类别:名称」，并取出对应任务数据（不存在时 task 为 undefined） */
+function parseQuestKey(questKey: string): { cat: string; name: string; task: any } {
+  const [cat, ...rest] = questKey.split(':')
+  const name = rest.join(':')
+  return { cat, name, task: (data.bounty as any)[cat]?.[name] }
 }
 
-function mergeDrops(drops: DropEntry[]): Array<{ id: number; name: string; num: number }> {
-  const map = new Map<number, { id: number; name: string; num: number }>()
-  for (const d of drops) {
-    const cur = map.get(d.id)
-    if (cur) cur.num += 1
-    else map.set(d.id, { id: d.id, name: d.name, num: 1 })
-  }
-  return [...map.values()]
-}
-
-function generateDropsForTask(ctx: Context): Array<{ id: number; name: string; num: number }> {
-  const weights = getCategoryWeights(ctx)
-  const count = 1 + Math.floor(Math.random() * 2)
-  const results: DropEntry[] = []
-  for (let i = 0; i < count; i++) {
-    const d = rollSingleDrop(weights)
-    if (d) results.push(d)
-  }
-  return mergeDrops(results)
+/**
+ * 为单个悬赏任务生成附带掉落：
+ * 按 bountyDropChance（%）决定是否掉落，掉落时随机 1 ~ bountyDropCount 件。
+ */
+function generateDropsForTask(config: Config): Array<{ id: number; name: string; num: number }> {
+  const chance = config.bountyDropChance ?? 100
+  const maxCount = Math.max(0, Math.floor(config.bountyDropCount ?? 2))
+  if (maxCount <= 0 || Math.random() * 100 >= chance) return []
+  const count = 1 + Math.floor(Math.random() * maxCount)
+  return mergeDrops(rollDrops(getDropCategoryWeights(config), count))
 }
 
 // ===== 成功率随机生成（25~100，步长 5，众数 75）=====
@@ -57,16 +50,7 @@ function generateDropsForTask(ctx: Context): Array<{ id: number; name: string; n
 function rollSuccessRate(): number {
   const values: number[] = []
   for (let sr = 25; sr <= 100; sr += 5) values.push(sr)
-
-  const weights = values.map(sr => Math.max(1, 100 - Math.abs(sr - 75)))
-  const total = weights.reduce((s, w) => s + w, 0)
-
-  let r = Math.random() * total
-  for (let i = 0; i < values.length; i++) {
-    r -= weights[i]
-    if (r <= 0) return values[i]
-  }
-  return 75
+  return weightedPick(values, sr => Math.max(1, 100 - Math.abs(sr - 75))) ?? 75
 }
 
 function successBonus(sr: number): number {
@@ -81,6 +65,7 @@ function calcStoneReward(baseExp: number, level: number, sr: number): number {
   return calcExpReward(baseExp, level, sr) * 5
 }
 
+/** 按任务 rate 加权、不放回地抽取 count 个任务 */
 function pickTasksByWeight(
   pool: Array<{ key: string; cat: string; name: string; task: any }>,
   count: number,
@@ -88,26 +73,21 @@ function pickTasksByWeight(
   const remaining = [...pool]
   const picked: typeof pool = []
   for (let i = 0; i < count && remaining.length > 0; i++) {
-    const total = remaining.reduce((s, t) => s + Math.max(1, Number(t.task.rate) || 1), 0)
-    let r = Math.random() * total
-    let idx = remaining.length - 1
-    for (let j = 0; j < remaining.length; j++) {
-      r -= Math.max(1, Number(remaining[j].task.rate) || 1)
-      if (r <= 0) { idx = j; break }
-    }
-    picked.push(remaining[idx])
-    remaining.splice(idx, 1)
+    const t = weightedPick(remaining, x => Math.max(1, Number(x.task.rate) || 1)) ?? remaining[remaining.length - 1]
+    picked.push(t)
+    remaining.splice(remaining.indexOf(t), 1)
   }
   return picked
 }
 
 async function generateBountyList(ctx: Context, uid: number) {
+  const config = getPluginConfig(ctx)
   await ctx.database.remove(TABLE.bountyList, { uid })
   const all = buildAllTasks()
   const picked = pickTasksByWeight(all, BOUNTY_SIZE)
   for (let i = 0; i < picked.length; i++) {
     const t = picked[i]
-    const drops = generateDropsForTask(ctx)
+    const drops = generateDropsForTask(config)
     const successRate = rollSuccessRate()
     await ctx.database.create(TABLE.bountyList, {
       uid, slot: i + 1, questKey: t.key,
@@ -123,16 +103,14 @@ async function loadBountyList(ctx: Context, uid: number) {
   return rows.sort((a, b) => a.slot - b.slot)
 }
 
-function formatBountyList(rows: any[], level: number): string {
+function formatBountyList(rows: Array<{ slot: number; questKey: string; dropJson: string; successRate: number }>, level: number): string {
   if (rows.length === 0) return '（暂无悬赏令，发送「悬赏令刷新」生成）'
   const lines: string[] = []
   for (const r of rows) {
-    const [cat, ...rest] = r.questKey.split(':')
-    const name = rest.join(':')
-    const task = (data.bounty as any)[cat]?.[name]
+    const { cat, name, task } = parseQuestKey(r.questKey)
     if (!task) continue
     const drops = JSON.parse(r.dropJson) as Array<{ id: number; name: string; num: number }>
-    const dropStr = drops.length > 0 ? drops.map(d => `${d.name}×${d.num}`).join('、') : '无'
+    const dropStr = drops.length > 0 ? formatDropList(drops) : '无'
     const sr = r.successRate ?? 75
     const baseExp = task.reward[1]
     const expReward = calcExpReward(baseExp, level, sr)
@@ -155,7 +133,8 @@ async function clearSession(ctx: Context, uid: number) {
 interface BountySettleResult {
   settled: boolean
   msg?: string
-  reason?: 'no-active' | 'not-ready' | 'error'
+  /** busy：另一请求正在结算同一悬赏令 */
+  reason?: 'no-active' | 'not-ready' | 'busy' | 'error'
   remainMs?: number
 }
 
@@ -164,7 +143,7 @@ interface BountySettleResult {
  */
 async function trySettleBounty(
   ctx: Context,
-  p: any,
+  p: { uid: number; level: string },
   wantStone = false,
 ): Promise<BountySettleResult> {
   const cdRows = await ctx.database.get(TABLE.cd, { uid: p.uid })
@@ -177,10 +156,10 @@ async function trySettleBounty(
   }
 
   // ✅ 抢占式删除（只有真正删除成功的那次请求才能继续）
-  const lockRes: any = await ctx.database.remove(TABLE.cd, { uid: p.uid, type: 2 })
+  const lockRes = await ctx.database.remove(TABLE.cd, { uid: p.uid, type: 2 })
   const locked = getAffectedRows(lockRes)
   if (locked === 0) {
-    return { settled: false, reason: 'not-ready', remainMs: 1000 }
+    return { settled: false, reason: 'busy' }
   }
 
   const cleanQuestAndWork = async () => {
@@ -200,9 +179,7 @@ async function trySettleBounty(
     await cleanQuestAndWork()
     return { settled: false, reason: 'error', msg: '任务列表数据异常，请重新发送「悬赏令」' }
   }
-  const [cat, ...rest] = listRows[0].questKey.split(':')
-  const name = rest.join(':')
-  const task = (data.bounty as any)[cat]?.[name]
+  const { name, task } = parseQuestKey(listRows[0].questKey)
   if (!task) {
     await cleanQuestAndWork()
     return { settled: false, reason: 'error', msg: '任务编号无效' }
@@ -223,18 +200,16 @@ async function trySettleBounty(
       await addStone(ctx, p.uid, stoneReward)
       msg = `✅ 「${name}」成功！\n💎 获得灵石 +${stoneReward}`
     } else {
-      p.exp += expReward
-      await ctx.database.set(TABLE.player, { uid: p.uid }, { exp: p.exp })
+      await addPlayerExp(ctx, p.uid, expReward)
       msg = `✅ 「${name}」成功！\n🌱 获得修为 +${expReward}`
     }
     if (drops.length > 0) {
       for (const d of drops) await addItem(ctx, p.uid, d.id, d.num)
-      msg += `\n🎁 额外掉落：${drops.map(d => `${d.name}×${d.num}`).join('、')}`
+      msg += `\n🎁 额外掉落：${formatDropList(drops)}`
     }
   } else {
     const expGain = Math.floor(calcExpReward(baseExp, level, successRate) * 0.3)
-    p.exp += expGain
-    await ctx.database.set(TABLE.player, { uid: p.uid }, { exp: p.exp })
+    await addPlayerExp(ctx, p.uid, expGain)
     msg = `❌ 「${name}」失败，仍获得修为 +${expGain}`
   }
 
@@ -245,14 +220,15 @@ async function trySettleBounty(
 
 // ===== 命令注册 =====
 
-export function registerBountyCommands(ctx: Context) {
+export function registerBountyCommands(ctx: Context, config: Config) {
   ctx.command('悬赏令帮助', '玩法说明').action(() =>
     [
-      '悬赏令            查看当前刷出的 3 个悬赏令（若进行中悬赏已到期会自动结算）',
+      '悬赏令            查看当前刷出的 3 个悬赏令（若进行中悬赏已到期会自动结算，默认给修为）',
       '悬赏令刷新        重新生成 3 个（每日 3 次免费，超出 1000 灵石）',
       '悬赏令接取 [序号]  接取对应悬赏令',
       '悬赏令结算 [灵石] 到期结算（不填默认给修为，填"灵石"则给灵石）',
       '悬赏令终止        中止任务（罚 500000 灵石）',
+      `每个悬赏令有 ${config.bountyDropChance}% 概率附带 1~${config.bountyDropCount} 件掉落`,
     ].join('\n')
   )
 
@@ -276,8 +252,7 @@ export function registerBountyCommands(ctx: Context) {
           await clearSession(ctx, p.uid)
           return prefix + '数据异常已清理，请重新发送「悬赏令」'
         }
-        const [cat, ...rest] = listRows[0].questKey.split(':')
-        const name = rest.join(':')
+        const { name } = parseQuestKey(listRows[0].questKey)
         const sr = listRows[0].successRate ?? 75
         const elapsed = (Date.now() - +new Date(cdRows[0].createTime)) / 1000
         const remainSec = Math.max(0, cdRows[0].scheduledTime - elapsed)
@@ -310,15 +285,14 @@ export function registerBountyCommands(ctx: Context) {
           formatBountyList(list, parseInt(p.level, 10) || 1)
       }
 
-      const cdRows = await ctx.database.get(TABLE.cd, { uid: p.uid })
-      if (cdRows[0]?.type === 2) return '正在进行悬赏令，无法刷新'
-      if (cdRows[0]?.type === 1) return '正在闭关中，无法刷新'
+      const busy = await getBusyKind(ctx, p.uid)
+      if (busy === 'bounty') return '正在进行悬赏令，无法刷新'
+      if (busy === 'closed') return '正在闭关中，无法刷新'
 
       const now = new Date()
-      const dayKey = now.toDateString()
       let cnt = p.workRefreshCount || 0
       let dayTs = p.workRefreshCountTime || 0
-      if (new Date(dayTs).toDateString() !== dayKey) { cnt = 0; dayTs = +now }
+      if (!isSameDay(dayTs, now)) { cnt = 0; dayTs = +now }
 
       let costNote = ''
       if (cnt >= 3) {
@@ -340,9 +314,9 @@ export function registerBountyCommands(ctx: Context) {
     .action(async ({ session }, no) => {
       if (!no) return '请输入编号（1~3）'
       const p = await requirePlayer(ctx, session)
-      const cdRows = await ctx.database.get(TABLE.cd, { uid: p.uid })
-      if (cdRows[0]?.type === 1) return '你正在闭关中，无法接取悬赏'
-      if (cdRows[0]?.type === 2) return '你已有进行中的悬赏令'
+      const busy = await getBusyKind(ctx, p.uid)
+      if (busy === 'closed') return '你正在闭关中，无法接取悬赏'
+      if (busy === 'bounty') return '你已有进行中的悬赏令'
 
       const list = await loadBountyList(ctx, p.uid)
       const target = list.find(r => r.slot === no)
@@ -351,9 +325,7 @@ export function registerBountyCommands(ctx: Context) {
         return `编号不存在（可用：${list.map(r => r.slot).join('/')}）`
       }
 
-      const [cat, ...rest] = target.questKey.split(':')
-      const name = rest.join(':')
-      const task = (data.bounty as any)[cat]?.[name]
+      const { cat, name, task } = parseQuestKey(target.questKey)
       if (!task) return '任务数据异常'
 
       const sr = target.successRate ?? 75
@@ -376,7 +348,8 @@ export function registerBountyCommands(ctx: Context) {
 
       if (!result.settled) {
         if (result.reason === 'no-active') return '当前没有进行中的悬赏令'
-        if (result.reason === 'not-ready') return `尚未完成，还需 ${formatRemainTime(result.remainMs!)}`
+        if (result.reason === 'busy') return '⏳ 悬赏令正在结算，请稍后'
+        if (result.reason === 'not-ready') return `尚未完成，还需 ${formatRemainTime(result.remainMs ?? 0)}`
         return result.msg || '结算失败'
       }
 

@@ -39,6 +39,8 @@ export interface Player {
   dualCultivation: number
   dualCultivationTime: Date
   insightCd: Date
+  /** 旧主键（平台 ID）遗留列，仅为兼容旧库，不参与任何逻辑 */
+  userId?: string
 }
 
 export interface CdRow {
@@ -162,6 +164,13 @@ export interface BountyListRow {
   createdAt: Date
 }
 
+/** 有「整局限服次数」的丹药（目前为攻击丹）的已服用次数，与背包行脱钩 */
+export interface PillLimitRow {
+  uid: number
+  pillId: number
+  usedCount: number
+}
+
 // ================= 扩展 Koishi 全局 Tables =================
 
 declare module 'koishi' {
@@ -181,6 +190,7 @@ declare module 'koishi' {
     wj6y3_xiuxian_shop: ShopRow
     wj6y3_xiuxian_pill_used: PillUsedRow
     wj6y3_xiuxian_bounty_list: BountyListRow
+    wj6y3_xiuxian_pill_limit: PillLimitRow
     monetary: MonetaryRow
   }
 }
@@ -203,6 +213,25 @@ export const TABLE = {
   shop: 'wj6y3_xiuxian_shop',
   pillUsed: 'wj6y3_xiuxian_pill_used',
   bountyList: 'wj6y3_xiuxian_bounty_list',
+  pillLimit: 'wj6y3_xiuxian_pill_limit',
+} as const
+
+// ================= 数值字段分类 =================
+// 整数：等级 / 次数 / 职位 / ID / 格数等（integer / unsigned，4 字节）
+// 长整数：可能超过 2^31 的数值（integer / unsigned，length 8；JS 端仍为 number）
+// 双精度：可能长期累计、未来可能超出长整数范围的数值（double，落库前一律向下取整）
+const LONG = { type: 'integer', length: 8 } as const
+const ULONG = { type: 'unsigned', length: 8 } as const
+
+/** 各表需要「落库前向下取整」的数值字段（长整数 + 双精度），供写入与启动归整使用 */
+export const FLOORED_FIELDS = {
+  wj6y3_xiuxian_player: ['power', 'exp', 'hp', 'maxhp', 'mp', 'maxmp', 'atk', 'sectContribution', 'workRefreshCountTime'],
+  wj6y3_xiuxian_sect: ['sectScale', 'sectMaterials', 'sectUsedStone', 'offeringSnapshot'],
+  wj6y3_xiuxian_buff: ['atkBuff'],
+  wj6y3_xiuxian_boss: ['hp', 'maxHp', 'atk'],
+  wj6y3_xiuxian_boss_participant: ['damage'],
+  wj6y3_xiuxian_bank: ['saveStone'],
+  wj6y3_xiuxian_shop: ['price'],
 } as const
 
 // ================= defineModels =================
@@ -214,17 +243,17 @@ export function defineModels(ctx: Context) {
     root: 'string',
     level: 'string',
     exercisesLevel: 'string',
-    power: 'unsigned',
+    power: ULONG,
     isSign: 'timestamp',
     exp: 'double',
     userName: 'string',
     levelUpCd: 'timestamp',
     levelUpRate: 'integer',
-    hp: 'double',
-    maxhp: 'double',
-    mp: 'double',
-    maxmp: 'double',
-    atk: 'double',
+    hp: LONG,
+    maxhp: LONG,
+    mp: LONG,
+    maxmp: LONG,
+    atk: LONG,
     atkPractice: 'integer',
     sectId: 'integer',
     sectPosition: 'integer',
@@ -237,12 +266,15 @@ export function defineModels(ctx: Context) {
     plotCount: 'integer',
     riftCd: 'timestamp',
     riftDailyCount: 'integer',
-    workRefreshCountTime: 'integer',
+    workRefreshCountTime: LONG,
     workRefreshCount: 'integer',
     rebirth: 'integer',
     dualCultivation: 'integer',
     dualCultivationTime: 'timestamp',
     insightCd: 'timestamp',
+    // 旧主键（平台 ID）遗留列。必须声明：旧库里该列仍是 PRIMARY KEY，
+    // 若不声明，minato 重建表时会把它连同 PRIMARY KEY 属性带入新表，与 PRIMARY KEY(uid) 冲突。
+    userId: { type: 'string', initial: '' },
   }, { primary: ['uid'] })
 
   ctx.model.extend('wj6y3_xiuxian_cd', {
@@ -285,7 +317,7 @@ export function defineModels(ctx: Context) {
     subBuff: 'integer',
     faqiBuff: 'integer',
     armorBuff: 'integer',
-    atkBuff: 'double',
+    atkBuff: LONG,
     blessedSpot: 'integer',
     furnaceBuff: 'integer',
     qiFlagBuff: 'integer',
@@ -312,21 +344,21 @@ export function defineModels(ctx: Context) {
     id: 'unsigned',
     name: 'string',
     level: 'integer',
-    hp: 'double',
-    maxHp: 'double',
-    atk: 'double',
+    hp: LONG,
+    maxHp: LONG,
+    atk: LONG,
   }, { primary: ['id'] })
 
   ctx.model.extend('wj6y3_xiuxian_boss_participant', {
     bossId: 'unsigned',
     uid: 'unsigned',
     platform: 'string',
-    damage: 'double',
+    damage: LONG,
   }, { primary: ['bossId', 'uid'] })
 
   ctx.model.extend('wj6y3_xiuxian_bank', {
     uid: 'unsigned',
-    saveStone: 'double',
+    saveStone: LONG,
     saveTime: 'timestamp',
     bankLevel: 'integer',
   }, { primary: ['uid'] })
@@ -344,7 +376,7 @@ export function defineModels(ctx: Context) {
     sellerUid: 'unsigned',
     sellerName: 'string',
     goodsId: 'integer',
-    price: 'integer',
+    price: LONG,
     goodsNum: 'integer',
     createTime: 'timestamp',
   }, { primary: ['id'] })
@@ -364,6 +396,12 @@ export function defineModels(ctx: Context) {
     successRate: 'integer',
     createdAt: 'timestamp',
   }, { primary: ['uid', 'slot'] })
+
+  ctx.model.extend('wj6y3_xiuxian_pill_limit', {
+    uid: 'unsigned',
+    pillId: 'unsigned',
+    usedCount: 'integer',
+  }, { primary: ['uid', 'pillId'] })
 }
 
 export interface MonetaryRow {

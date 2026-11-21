@@ -101,4 +101,8 @@ export interface BreakthroughRates {
 export interface ComputedStats {
   hp: number; mp: number; atk: number; def: number; spd: number
   crit: number; critDmg: number; pen: number
+  /** 原减伤%（境界 def） */
+  baseDef: number
+  /** 减伤加乘（练体% + 防具%，0.15 = 15%） */
+  defBonusPct: number
 }

@@ -1,4 +1,10 @@
-import { Schema } from 'koishi'
+import { Context, Schema } from 'koishi'
+
+/** 悬赏令 / 秘境共用的掉落类别默认权重 */
+export const DEFAULT_DROP_WEIGHTS: Record<string, number> = {
+  pill: 20, craftPill: 8, herb: 25, weapon: 12, armor: 8,
+  gongfa: 10, shentong: 10, fuxiu: 3, qiFlag: 2, furnace: 2,
+}
 
 export interface Config {
   currency: string
@@ -39,18 +45,16 @@ export const Config: Schema<Config> = Schema.intersect([
       .description('可飞升的最高境界ID(留空则自动取最大ID)'),
 
     // ---- 悬赏令掉落----
-    bountyDropChance: Schema.number().default(50).min(0).max(100)
-      .description('悬赏令任务掉落概率（%）—— 注意：新版为每任务必掉 1~2 件，此项暂不使用'),
-    bountyDropCount: Schema.number().default(2).min(0)
-      .description('每任务掉落最大物品数量（固定 2，此项暂不使用）'),
-    bountyDropCategoryWeights: Schema.dict(Schema.number()).default({
-      pill: 20, craftPill: 8, herb: 25, weapon: 12, armor: 8,
-      gongfa: 10, shentong: 10, fuxiu: 3, qiFlag: 2, furnace: 2,
-    }).description('掉落类别权重'),
+    bountyDropChance: Schema.number().default(100).min(0).max(100)
+      .description('悬赏令任务掉落概率（%）：每个任务按此概率决定是否附带掉落物品'),
+    bountyDropCount: Schema.natural().default(2)
+      .description('悬赏令每个任务最多掉落的物品件数（掉落时随机 1 ~ 该值件，0 表示不掉落）'),
+    bountyDropCategoryWeights: Schema.dict(Schema.number()).default({ ...DEFAULT_DROP_WEIGHTS })
+      .description('掉落类别权重（悬赏令 / 秘境共用）'),
 
     // ---- 秘境 ----
     riftDropChance: Schema.number().default(40).max(100)
-      .description('秘境探索獲取灵石/修为時的额外物品掉落概率（%）'),
+      .description('秘境探索获取灵石/修为时的额外物品掉落概率（%）'),
 
     // ---- 坊市----
     shopAutoListing: Schema.boolean().default(true)
@@ -84,3 +88,12 @@ export const Config: Schema<Config> = Schema.intersect([
     Schema.object({}),
   ]),
 ]) as unknown as Schema<Config>
+
+/**
+ * 读取本插件的配置（类型化）。
+ * Cordis 的 ctx.config 本就指向插件自身作用域的配置，但 Koishi 将其类型声明为全局配置，
+ * 因此集中在这一处做类型转换，其余代码一律通过本函数或 register 参数取得 Config。
+ */
+export function getPluginConfig(ctx: Context): Config {
+  return ctx.config as unknown as Config
+}

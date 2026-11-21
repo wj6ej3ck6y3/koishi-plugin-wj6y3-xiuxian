@@ -1,23 +1,29 @@
-import { Context, } from 'koishi'
-import { data, rollRoot, getLevel, getRoot, } from '../data'
-import { TABLE, Player, } from '../models'
+import { Context } from 'koishi'
+import { Config } from '../config'
+import { data, rollRoot, getLevel, getRoot } from '../data'
+import { TABLE, Player } from '../models'
 
 import {
-  getPlayer, requirePlayer, computeStats,
-  getStone, addStone, costStone,
-  getBuff, getLearnedSkills, checkBreakthrough, computeOneShotBreakthroughBonus,
+  getPlayer, requirePlayer, loadAndComputeStats,
+  getStone, addStone, costStone, getTopStoneHolders,
+  getOrCreateBuff, getLearnedSkillsAndMigrate, checkBreakthrough, computeOneShotBreakthroughBonus,
+  getFuxiuBonus,
   statLabel,
+  formatModifiers,
+  getPositionName,
   getBattleRecord,
   truncateDecimal,
   formatPct,
   getAffectedRows,
   getSessionUid,
+  isSameDay,
 } from '../utils'
 
-export function registerBaseCommands(ctx: Context) {
+export function registerBaseCommands(ctx: Context, config: Config) {
   // ---------- 建号 ----------
   ctx.command('我要修仙', '踏上仙途')
     .action(async ({ session }) => {
+      if (!session) return
       const uid = await getSessionUid(ctx, session)
       if (uid === null) {
         return '⚠️ 账号未同步，请稍后重试或联系管理员'
@@ -56,7 +62,7 @@ export function registerBaseCommands(ctx: Context) {
         rebirth: 0, dualCultivation: 0, dualCultivationTime: new Date(0),
         insightCd: new Date(0),
       }
-      await ctx.database.create('wj6y3_xiuxian_player', player)
+      await ctx.database.create(TABLE.player, player)
 
       return [
         `🌱 ${player.userName}，你已踏入仙途！`,
@@ -72,17 +78,16 @@ export function registerBaseCommands(ctx: Context) {
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
       const now = new Date()
-      const last = new Date(p.isSign)
-      if (last.toDateString() === now.toDateString()) return '今日已签到，明日再来。'
+      if (isSameDay(p.isSign, now)) return '今日已签到，明日再来。'
 
-      const min = (ctx as any).config?.signMin ?? 1000
-      const max = (ctx as any).config?.signMax ?? 2000
+      const min = config.signMin
+      const max = config.signMax
       const gain = Math.floor(min + Math.random() * (max - min + 1))
 
       // ✅ 原子性：只有 isSign 仍是「今日 0 点之前」时才更新成功
       const todayStart = new Date(now)
       todayStart.setHours(0, 0, 0, 0)
-      const writeRes: any = await ctx.database.set(TABLE.player, {
+      const writeRes = await ctx.database.set(TABLE.player, {
         uid: p.uid,
         isSign: { $lt: todayStart },
       }, { isSign: now })
@@ -103,51 +108,47 @@ export function registerBaseCommands(ctx: Context) {
       const root = getRoot(p.root)
       const stone = await getStone(ctx, p.uid)
 
-      const st = await computeStats(ctx, p)
-      const buff = await getBuff(ctx, p.uid)
-      const learned = await getLearnedSkills(ctx, p.uid)
+      const st = await loadAndComputeStats(ctx, p)
+      const buff = await getOrCreateBuff(ctx, p.uid)
+      const learned = await getLearnedSkillsAndMigrate(ctx, p.uid)
 
-      const gongfaStatSums: Record<string, number> = {}
+      // 总加成：主功法的百分比加成 + 辅修已实作的效果（气血 / 攻击 / 吸血）合并显示
+      const skillStatSums: Record<string, number> = {}
       for (const gid of learned.gongfa) {
         const g = data.gongfa[String(gid)]
         if (!g?.modifiers) continue
-        for (const m of g.modifiers as any[]) {
+        for (const m of g.modifiers) {
           if (m.mode && m.mode !== 'pct') continue
-          gongfaStatSums[m.stat] = (gongfaStatSums[m.stat] ?? 0) + m.value
+          skillStatSums[m.stat] = (skillStatSums[m.stat] ?? 0) + m.value
         }
       }
       for (const fid of learned.fuxiu) {
-        const sub = data.fuxiu[String(fid)]
-        if (!sub) continue
-        if (sub.effect === 'hpPct') {
-          gongfaStatSums['hp'] = (gongfaStatSums['hp'] ?? 0) + sub.value / 100
-        } else if (sub.effect === 'damageBoost') {
-          gongfaStatSums['atk'] = (gongfaStatSums['atk'] ?? 0) + sub.value / 100
-        }
+        const b = getFuxiuBonus(data.fuxiu[String(fid)])
+        if (b) skillStatSums[b.stat] = (skillStatSums[b.stat] ?? 0) + b.value
       }
 
       const info = checkBreakthrough(p)
       const oneShot = await computeOneShotBreakthroughBonus(ctx, p.uid, p.level)
       const tempRate = p.levelUpRate || 0
       const baseRate = Math.max(0, info.rate - tempRate)
-      const dueRate = oneShot.bonus
-      const totalRate = Math.min(100, baseRate + tempRate + dueRate)
+      const oneShotRate = oneShot.bonus
+      const totalRate = Math.min(100, baseRate + tempRate + oneShotRate)
 
       const equipItems: Array<{
-        icon: string; label: string; id: number; table: any;
+        icon: string; label: string; id: number; table: Record<string, any>;
         desc?: (m: any) => string
       }> = [
           {
             icon: '⚔️', label: '武器', id: buff.faqiBuff, table: data.weapons,
             desc: (m) => {
-              const mods = (m.modifiers ?? []).map((x: any) => `${statLabel(x.stat)} +${(x.value * 100).toFixed(0)}%`).join('、')
+              const mods = formatModifiers(m.modifiers, 0, '')
               return mods ? `（${mods}）` : ''
             },
           },
           {
             icon: '🛡️', label: '防具', id: buff.armorBuff, table: data.armors,
             desc: (m) => {
-              const mods = (m.modifiers ?? []).map((x: any) => `${statLabel(x.stat)} +${(x.value * 100).toFixed(0)}%`).join('、')
+              const mods = formatModifiers(m.modifiers, 0, '')
               return mods ? `（${mods}）` : ''
             },
           },
@@ -181,9 +182,9 @@ export function registerBaseCommands(ctx: Context) {
       lines.push(`📚 已学辅修数（${learned.fuxiu.length}）`)
       lines.push(`✨ 已学神通数（${learned.shentong.length}）`)
 
-      if (learned.gongfa.length > 0) {
+      if (learned.gongfa.length > 0 || learned.fuxiu.length > 0) {
         const parts: string[] = []
-        for (const [stat, val] of Object.entries(gongfaStatSums)) {
+        for (const [stat, val] of Object.entries(skillStatSums)) {
           if (val !== 0) parts.push(`${statLabel(stat)} +${(val * 100).toFixed(0)}%`)
         }
         lines.push(`总加成：${parts.length ? parts.join(' / ') : '无'}`)
@@ -195,9 +196,7 @@ export function registerBaseCommands(ctx: Context) {
       const bodyLevelId = p.exercisesLevel
       const bodyLevel = bodyLevelId ? data.bodyLevels[bodyLevelId] : undefined
       if (bodyLevel) {
-        const bodyModStr = (bodyLevel.modifiers ?? [])
-          .map(m => `${statLabel(m.stat)} +${(m.value * 100).toFixed(2)}%`)
-          .join('、')
+        const bodyModStr = formatModifiers(bodyLevel.modifiers, 2, '')
         lines.push(`🗿 炼体：${bodyLevel.name}`)
         if (bodyModStr) lines.push(`  加成：${bodyModStr}`)
       }
@@ -209,7 +208,7 @@ export function registerBaseCommands(ctx: Context) {
         } else {
           const meta = eq.table?.[String(eq.id)]
           const name = meta?.name ?? `未知#${eq.id}`
-          const desc = eq.desc ? eq.desc(meta) : ''
+          const desc = eq.desc && meta ? eq.desc(meta) : ''
           lines.push(`  ${eq.icon} ${eq.label}：${name}${desc}`)
         }
       }
@@ -230,8 +229,7 @@ export function registerBaseCommands(ctx: Context) {
       if (p.sectId && p.sectId > 0) {
         const [sect] = await ctx.database.get(TABLE.sect, { sectId: p.sectId })
         if (sect) {
-          const POSITION_NAMES = ['散修', '宗主', '长老', '亲传弟子', '内门弟子', '外门弟子']
-          sectLine = `${sect.sectName}（${POSITION_NAMES[p.sectPosition] || '未知错误'}）  贡献 ${p.sectContribution}`
+          sectLine = `${sect.sectName}（${getPositionName(p.sectPosition)}）  贡献 ${p.sectContribution}`
         } else {
           sectLine = `数据异常（编号 ${p.sectId}）`
         }
@@ -279,7 +277,7 @@ export function registerBaseCommands(ctx: Context) {
     })
 
   // ---------- 改名 ----------
-  ctx.command('修改道号 <name:string>', '修改道号（消耗 50000 × 境界ID 灵石）')
+  ctx.command('修改道号 <name:string>', '修改道号（道号不可含空格，消耗 50000 × 境界ID 灵石）')
     .action(async ({ session }, name) => {
       if (!name) return '请输入新的道号'
       if (Buffer.byteLength(name, 'utf-8') > 30) return '道号过长（最多 30 字节）'
@@ -299,24 +297,28 @@ export function registerBaseCommands(ctx: Context) {
     })
 
   // ---------- 排行榜 ----------
-  ctx.command('修仙排行榜 [type:string]', '查看排行榜')
-    .action(async ({ session }, type = '境界') => {
+  ctx.command('修仙排行榜 [type:string]', '查看排行榜（境界 / 灵石 / 战力）')
+    .action(async (_, type = '境界') => {
       const limit = 10
       if (type === '灵石') {
-        if (!ctx.get('monetary')) return '灵石排行榜需 monetary 服务'
-        const all = await ctx.database.get(TABLE.player, {})
-        const rows = await Promise.all(all.map(async p => ({ p, s: await getStone(ctx, p.uid) })))
-        rows.sort((a, b) => b.s - a.s)
-        return '💎 灵石排行榜 TOP10\n' + rows.slice(0, limit)
-          .map((r, i) => `${i + 1}. ${r.p.userName} - ${r.s}`).join('\n')
+        // 直接按货币表排序取前几名，再只保留已建号的玩家
+        const top = await getTopStoneHolders(ctx, limit * 5)
+        const players = top.length
+          ? await ctx.database.get(TABLE.player, { uid: { $in: top.map(t => t.uid) } }, ['uid', 'userName'])
+          : []
+        const nameOf = new Map(players.map(pl => [pl.uid, pl.userName]))
+        const rows = top.filter(t => nameOf.has(t.uid)).slice(0, limit)
+        return '💎 灵石排行榜 TOP10\n' + rows
+          .map((r, i) => `${i + 1}. ${nameOf.get(r.uid)} - ${r.value}`).join('\n')
       }
       if (type === '战力') {
         const rows = await ctx.database.get(TABLE.player, {}, { sort: { power: 'desc' }, limit })
         return '⚔️ 战力排行榜 TOP10\n' + rows
           .map((r, i) => `${i + 1}. ${r.userName} - ${r.power}`).join('\n')
       }
-      const rows = await ctx.database.get(TABLE.player, {}, { limit: 500 })
-      rows.sort((a, b) => parseInt(b.level) - parseInt(a.level) || b.exp - a.exp)
+      // 境界 ID 以字符串存储，数据库无法按数值排序：取全部玩家的必要字段后按「数字境界 → 修为」排序
+      const rows = await ctx.database.get(TABLE.player, {}, ['uid', 'userName', 'level', 'exp'])
+      rows.sort((a, b) => (parseInt(b.level, 10) || 0) - (parseInt(a.level, 10) || 0) || b.exp - a.exp)
       return '🌌 境界排行榜 TOP10\n' + rows.slice(0, limit)
         .map((r, i) => `${i + 1}. ${r.userName} - ${getLevel(r.level)?.name}`).join('\n')
     })

@@ -8,8 +8,12 @@ import type {
 const DATA_DIR = resolve(__dirname, '../data')
 
 function load<T = any>(file: string): Record<string, T> {
-  const raw = readFileSync(resolve(DATA_DIR, file), 'utf-8')
-  return JSON.parse(raw)
+  const path = resolve(DATA_DIR, file)
+  try {
+    return JSON.parse(readFileSync(path, 'utf-8'))
+  } catch (e: any) {
+    throw new Error(`修仙数据文件「${file}」读取或解析失败（${path}）：${e?.message ?? e}`)
+  }
 }
 
 export const data = {
@@ -45,16 +49,32 @@ export function getWeapon(id: string | number): WeaponOrArmorEntry | undefined {
 export function getArmor(id: string | number): WeaponOrArmorEntry | undefined { return data.armors[String(id)] }
 export function getBodyLevel(id: string | number): BodyLevelEntry | undefined { return data.bodyLevels[String(id)] }
 
+/**
+ * 通用加权随机：按 weightOf 的权重从 items 中抽取一个。
+ * 权重 ≤ 0 的项不会被抽中；items 为空或总权重为 0 时返回 undefined。
+ */
+export function weightedPick<T>(items: readonly T[], weightOf: (item: T) => number): T | undefined {
+  let total = 0
+  for (const it of items) total += Math.max(0, weightOf(it) || 0)
+  if (total <= 0) return undefined
+  let r = Math.random() * total
+  for (const it of items) {
+    const w = Math.max(0, weightOf(it) || 0)
+    if (w <= 0) continue
+    r -= w
+    if (r <= 0) return it
+  }
+  // 浮点误差兜底：返回最后一个权重 > 0 的项
+  for (let i = items.length - 1; i >= 0; i--) {
+    if (Math.max(0, weightOf(items[i]) || 0) > 0) return items[i]
+  }
+  return undefined
+}
+
 /** 依权重抽取灵根，返回 [id, data] */
 export function rollRoot(): [string, RootData] {
   const entries = Object.entries(data.roots)
-  const total = entries.reduce((s, [, v]) => s + v.weight, 0)
-  let r = Math.random() * total
-  for (const [id, v] of entries) {
-    r -= v.weight
-    if (r <= 0) return [id, v]
-  }
-  return entries[0]
+  return weightedPick(entries, ([, v]) => v.weight) ?? entries[0]
 }
 
 /**
@@ -65,13 +85,7 @@ export function rollRootExcluding(excludeCount: number): [string, RootData] {
   const entries = Object.entries(data.roots).sort((a, b) => Number(a[0]) - Number(b[0]))
   const available = entries.slice(Math.max(0, excludeCount))
   if (available.length === 0) return entries[entries.length - 1]
-  const total = available.reduce((s, [, v]) => s + v.weight, 0)
-  let r = Math.random() * total
-  for (const [id, v] of available) {
-    r -= v.weight
-    if (r <= 0) return [id, v]
-  }
-  return available[available.length - 1]
+  return weightedPick(available, ([, v]) => v.weight) ?? available[available.length - 1]
 }
 
 /** 计算两个境界（"名称"）的共鸣加成 */

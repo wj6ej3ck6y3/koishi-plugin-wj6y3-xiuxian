@@ -1,26 +1,26 @@
 import { Context } from 'koishi'
 import { TABLE } from '../models'
-import { addStone, formatPct, resolveAtUid } from '../utils'
+import { addStone, formatPct, getPlayer, resolveAtUid } from '../utils'
 
 export function registerAdminCommands(ctx: Context) {
-  ctx.command('神秘力量 <amount:number>', '赠送灵石')
+  ctx.command('神秘力量 <amount:number>', '赠送灵石', { authority: 5 })
     .action(async ({ session }, amount) => {
       if (!amount) return '请输入数量'
 
       // ✅ 显式区分「有 @」和「没 @」两种情况：
       //   - 没 @ 人 → 全服发放
       //   - 有 @ 人但 resolveAtUid 失败（对方在本平台无账号）→ 报错，绝不走全服分支
-      const atElement = (session as any).elements?.find((e: any) => e.type === 'at')
+      const atElement = session?.elements?.find(e => e.type === 'at')
 
       if (atElement) {
         const targetUid = await resolveAtUid(ctx, session)
         if (targetUid === null) {
           return '⚠️ 目标用户未在本平台绑定账号，无法定向发放（如需全服发放请不要 @ 任何人）'
         }
-        const rows = await ctx.database.get(TABLE.player, { uid: targetUid })
-        if (!rows[0]) return '目标尚未踏入仙途'
-        await addStone(ctx, rows[0].uid, amount)
-        return `💎 已向 ${rows[0].userName} 发放 ${amount} 灵石`
+        const target = await getPlayer(ctx, targetUid)
+        if (!target) return '目标尚未踏入仙途'
+        await addStone(ctx, target.uid, amount)
+        return `💎 已向 ${target.userName} 发放 ${amount} 灵石`
       }
 
       // 没有 @ → 全服发放
@@ -30,25 +30,25 @@ export function registerAdminCommands(ctx: Context) {
       return `💎 已向全服 ${all.length} 人各发放 ${amount} 灵石`
     })
 
-  ctx.command('重置状态', '重置气血真元')
+  ctx.command('重置状态', '重置气血真元', { authority: 5 })
     .action(async ({ session }) => {
       // ✅ 与「神秘力量」一致：区分「有 @」和「没 @」
-      const atElement = (session as any).elements?.find((e: any) => e.type === 'at')
+      const atElement = session?.elements?.find(e => e.type === 'at')
 
       if (atElement) {
         const targetUid = await resolveAtUid(ctx, session)
         if (targetUid === null) {
           return '⚠️ 目标用户未在本平台绑定账号，无法定向重置（如需全服重置请不要 @ 任何人）'
         }
-        const p = await ctx.database.get(TABLE.player, { uid: targetUid })
-        if (!p[0]) return '目标尚未踏入仙途'
+        const target = await getPlayer(ctx, targetUid)
+        if (!target) return '目标尚未踏入仙途'
         await ctx.database.set(TABLE.player, { uid: targetUid }, {
-          hp: p[0].maxhp, mp: p[0].maxmp,
+          hp: target.maxhp, mp: target.maxmp,
         })
         return [
-          `✅ 已重置 ${p[0].userName} 状态`,
-          `🩸 气血：${p[0].maxhp}/${p[0].maxhp}（${formatPct(p[0].maxhp, p[0].maxhp)}%）  ` +
-          `💧 真元：${p[0].maxmp}/${p[0].maxmp}（${formatPct(p[0].maxmp, p[0].maxmp)}%）`,
+          `✅ 已重置 ${target.userName} 状态`,
+          `🩸 气血：${target.maxhp}/${target.maxhp}（${formatPct(target.maxhp, target.maxhp)}%）  ` +
+          `💧 真元：${target.maxmp}/${target.maxmp}（${formatPct(target.maxmp, target.maxmp)}%）`,
         ].join('\n')
       }
 

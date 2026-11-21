@@ -1,7 +1,8 @@
 import { Context } from 'koishi'
+import { data } from '../data'
 import { TABLE } from '../models'
 import {
-  requirePlayer, costStone, addItem, removeItem, getBuff,
+  requirePlayer, costStone, addItem, removeItem, getOrCreateBuff,
   getQiFlagBonus,
   formatRemainTime,
   getQualityLabel
@@ -38,7 +39,7 @@ export function registerSpotCommands(ctx: Context) {
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
       if (!p.blessedSpotFlag) return '尚未开辟洞府'
-      const buff = await getBuff(ctx, p.uid)
+      const buff = await getOrCreateBuff(ctx, p.uid)
       if (buff.blessedSpot >= 5) return '灵气已达 5 级'
       const cost = SPOT_LEVEL_COST(buff.blessedSpot + 1)
       if (!(await costStone(ctx, p.uid, cost))) return `需 ${cost} 灵石`
@@ -67,16 +68,14 @@ export function registerSpotCommands(ctx: Context) {
       const p = await requirePlayer(ctx, session)
       if (!p.blessedSpotFlag) return '尚未开辟洞府'
 
-      const { data: _d } = await import('../data')
-
       if (!herb) {
         const items = await ctx.database.get(TABLE.back, { uid: p.uid })
-        const herbs = items.filter(i => !!_d.herbs[String(i.goodsId)])
+        const herbs = items.filter(i => !!data.herbs[String(i.goodsId)])
         if (!herbs.length) return '背包里没有可种植的药材'
 
         // 格式化每个药材：带品阶 + 名称 + 数量
         const formatted = herbs.map(i => {
-          const herbData = _d.herbs[String(i.goodsId)]
+          const herbData = data.herbs[String(i.goodsId)]
           const quality = getQualityLabel(i.goodsId) // 返回如 "1 阶药材"
           const qStr = quality ? `[${quality}] ` : ''
           return `${qStr}${herbData.name}×${i.goodsNum}`
@@ -91,7 +90,7 @@ export function registerSpotCommands(ctx: Context) {
         return '🌱 背包可种植药材：\n' + lines.join('\n')
       }
 
-      const entry = Object.entries(_d.herbs).find(([, v]: any) => v.name === herb)
+      const entry = Object.entries(data.herbs).find(([, v]: any) => v.name === herb)
       if (!entry) return '未找到该药材'
       const [herbId, herbData]: any = entry
       const plots = await ctx.database.get(TABLE.plot, { uid: p.uid, plantId: 0 })
@@ -131,7 +130,7 @@ export function registerSpotCommands(ctx: Context) {
 
         if (!mature.length) return '没有成熟灵田'
 
-        const buff = await getBuff(ctx, p.uid)
+        const buff = await getOrCreateBuff(ctx, p.uid)
         // 每级增加 50%（0.5倍）产量
         const bonus = 1 + buff.blessedSpot * 0.5
         let total = 0
@@ -156,10 +155,9 @@ export function registerSpotCommands(ctx: Context) {
       const p = await requirePlayer(ctx, session)
       const rows = await ctx.database.get(TABLE.plot, { uid: p.uid })
       if (!rows.length) return '尚未开垦灵田'
-      const { data: _d } = await import('../data')
       return rows.map(r => {
         if (!r.plantId) return `#${r.plotIndex}：空闲`
-        const herb = (_d.herbs as any)[r.plantId]?.name ?? r.plantId
+        const herb = (data.herbs as any)[r.plantId]?.name ?? r.plantId
         const remainMs = Math.max(0, r.plantMinutes * 60000 - (Date.now() - +new Date(r.plantAt)))
         return `#${r.plotIndex}：${herb}${remainMs <= 0 ? '（已成熟）' : `（剩 ${formatRemainTime(remainMs)}）`}`
       }).join('\n')
@@ -169,7 +167,7 @@ export function registerSpotCommands(ctx: Context) {
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
       if (!p.blessedSpotFlag) return '尚未开辟洞府'
-      const buff = await getBuff(ctx, p.uid)
+      const buff = await getOrCreateBuff(ctx, p.uid)
       const plots = await ctx.database.get(TABLE.plot, { uid: p.uid })
       const qiBonus = await getQiFlagBonus(ctx, p.uid)
       const flagLine = qiBonus.name

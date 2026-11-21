@@ -1,17 +1,57 @@
-import { Context, Session } from 'koishi'
+import { $, Context, Session } from 'koishi'
+import type { Query, Tables } from 'koishi'
 import {
   data, getLevel, getRoot, getGongfa, getFuXiu, getWeapon, getArmor,
   getBodyLevel, computeResonance, getShenTong, getSkillType, getShenTongWeight,
+  weightedPick,
 } from './data'
-import { TABLE, Player, BuffRow } from './models'
-import type { ComputedStats, Modifier } from './types'
+import { TABLE, Player, BuffRow, FLOORED_FIELDS } from './models'
+import type { ComputedStats, Modifier, FuXiuEntry } from './types'
+import { Config, getPluginConfig, DEFAULT_DROP_WEIGHTS } from './config'
 
-export { getShenTong }
+export { getShenTong, weightedPick }
+
+// ======================= 常量 =======================
+
+/** 渡厄丹物品 ID（渡厄丹的唯一判定依据） */
+export const DUE_PILL_ID = 1999
+
+/** 攻击丹：每种整局限服 5 次（飞升 / 重入仙途时重置） */
+export const ATK_PILL_TAG = '攻击丹'
+export const ATK_PILL_USE_LIMIT = 5
+
+// ======================= 通用小工具 =======================
+
+/** 两个时间是否为同一天（服务器本地时区） */
+export function isSameDay(
+  a: Date | number | string | null | undefined,
+  b: Date | number | string = new Date(),
+): boolean {
+  if (a === null || a === undefined) return false
+  return new Date(a).toDateString() === new Date(b).toDateString()
+}
+
+/** 气血低于上限的 1%（或数据异常）视为重伤 */
+export function isBadlyInjured(hp: number, maxhp: number): boolean {
+  if (!Number.isFinite(hp)) return true
+  return hp < Math.max(1, Math.floor(maxhp * 0.01))
+}
+
+/** 写库前把指定表的「长整数 / 双精度」字段向下取整（返回新对象，不修改原对象） */
+export function floorRow<T extends object>(table: keyof typeof FLOORED_FIELDS, row: T): T {
+  const out = { ...row } as Record<string, unknown>
+  for (const f of FLOORED_FIELDS[table] as readonly string[]) {
+    const v = out[f]
+    if (typeof v === 'number' && Number.isFinite(v)) out[f] = Math.floor(v)
+  }
+  return out as T
+}
 
 // ======================= Session → uid =======================
 
 /** 从 session 解析 uid（Koishi 用户 ID）。优先走 session.user.id，兜底走 database.getUser。 */
-export async function getSessionUid(ctx: Context, session: Session): Promise<number | null> {
+export async function getSessionUid(ctx: Context, session: Session | undefined): Promise<number | null> {
+  if (!session) return null
   const direct = (session as any).user?.id
   if (typeof direct === 'number') return direct
   if (!session.userId) return null
@@ -24,7 +64,8 @@ export async function getSessionUid(ctx: Context, session: Session): Promise<num
 }
 
 /** 从 `@` 元素解析 uid。`@` 中的 id 是平台 userId，需通过 getUser 转 uid。 */
-export async function resolveAtUid(ctx: Context, session: Session): Promise<number | null> {
+export async function resolveAtUid(ctx: Context, session: Session | undefined): Promise<number | null> {
+  if (!session) return null
   const targetPlatformId = (session as any).elements?.find((e: any) => e.type === 'at')?.attrs?.id
   if (!targetPlatformId) return null
   try {
@@ -38,11 +79,11 @@ export async function resolveAtUid(ctx: Context, session: Session): Promise<numb
 // ======================= 玩家读取 =======================
 
 export async function getPlayer(ctx: Context, uid: number): Promise<Player | null> {
-  const rows = await ctx.database.get('wj6y3_xiuxian_player', { uid })
+  const rows = await ctx.database.get(TABLE.player, { uid })
   return rows[0] ?? null
 }
 
-export async function requirePlayer(ctx: Context, session: Session): Promise<Player> {
+export async function requirePlayer(ctx: Context, session: Session | undefined): Promise<Player> {
   const uid = await getSessionUid(ctx, session)
   if (uid === null) throw new Error('账号未同步，请稍后重试或联系管理员')
   const p = await getPlayer(ctx, uid)
@@ -50,8 +91,11 @@ export async function requirePlayer(ctx: Context, session: Session): Promise<Pla
   return p
 }
 
-export async function getBuff(ctx: Context, uid: number): Promise<BuffRow> {
-  const rows = await ctx.database.get('wj6y3_xiuxian_buff', { uid })
+// ======================= 装备 / 洞府槽位 =======================
+
+/** 读取玩家的槽位行（装备 / 洞府灵气 / 攻击丹加成）；不存在时先建立默认行再返回 */
+export async function getOrCreateBuff(ctx: Context, uid: number): Promise<BuffRow> {
+  const rows = await ctx.database.get(TABLE.buff, { uid })
   if (rows[0]) return rows[0]
   const row: BuffRow = {
     uid, mainBuff: 0, secBuff: 0, subBuff: 0,
@@ -59,8 +103,25 @@ export async function getBuff(ctx: Context, uid: number): Promise<BuffRow> {
     furnaceBuff: 0,
     qiFlagBuff: 0,
   }
-  await ctx.database.create('wj6y3_xiuxian_buff', row)
+  await ctx.database.create(TABLE.buff, row)
   return row
+}
+
+export type EquipSlot = 'faqiBuff' | 'armorBuff' | 'furnaceBuff' | 'qiFlagBuff'
+export const EQUIP_SLOTS: readonly EquipSlot[] = ['faqiBuff', 'armorBuff', 'furnaceBuff', 'qiFlagBuff']
+
+/** 装备槽写入的唯一入口：只改指定槽位（goodsId = 0 表示卸下），绝不触及背包 */
+export async function setEquipSlot(ctx: Context, uid: number, slot: EquipSlot, goodsId: number): Promise<void> {
+  const buff = await getOrCreateBuff(ctx, uid)
+  if (buff[slot] === goodsId) return
+  const patch: Partial<BuffRow> = {}
+  patch[slot] = goodsId
+  await ctx.database.set(TABLE.buff, { uid }, patch)
+}
+
+/** 当前装备中的物品 ID 集合 */
+export function getEquippedIds(buff: BuffRow): Set<number> {
+  return new Set(EQUIP_SLOTS.map(s => buff[s]).filter(id => !!id))
 }
 
 export function truncateDecimal(value: number, digits = 2): number {
@@ -82,8 +143,9 @@ export interface LearnedSkills {
   shentong: number[]
 }
 
-export async function getLearnedSkills(ctx: Context, uid: number): Promise<LearnedSkills> {
-  const buff = await getBuff(ctx, uid)
+/** 读取已学的功法 / 辅修 / 神通；同时把旧版 buff 槽位（mainBuff/subBuff/secBuff）里的技能迁移进技能表 */
+export async function getLearnedSkillsAndMigrate(ctx: Context, uid: number): Promise<LearnedSkills> {
+  const buff = await getOrCreateBuff(ctx, uid)
   const existing = await ctx.database.get(TABLE.skill, { uid })
   const have = new Set(existing.map(r => r.skillId))
 
@@ -112,17 +174,17 @@ export async function getLearnedSkills(ctx: Context, uid: number): Promise<Learn
 // ======================= 灵石 =======================
 
 function getCurrency(ctx: Context): string {
-  const c = (ctx as any).config?.currency
+  const c = getPluginConfig(ctx).currency
   if (typeof c === 'string' && c.trim().length > 0) return c.trim()
   return '灵石'
 }
 
+/** monetary 为必需服务（index.ts inject.required），此处必然存在 */
 function getMonetary(ctx: Context): any {
   return ctx.get('monetary')
 }
 
 export async function getStone(ctx: Context, uid: number): Promise<number> {
-  if (!getMonetary(ctx)) return 0
   try {
     const rows = await ctx.database.get('monetary', { uid, currency: getCurrency(ctx) }, ['value'])
     return Number(rows[0]?.value) || 0
@@ -133,15 +195,21 @@ export async function getStone(ctx: Context, uid: number): Promise<number> {
 }
 
 export async function addStone(ctx: Context, uid: number, amount: number) {
-  const monetary = getMonetary(ctx)
-  if (!monetary) return
   const cur = getCurrency(ctx)
   try {
-    if (amount > 0) await monetary.gain(uid, amount, cur)
-    else if (amount < 0) await monetary.cost(uid, -amount, cur)
+    if (amount > 0) await getMonetary(ctx).gain(uid, amount, cur)
+    else if (amount < 0) await getMonetary(ctx).cost(uid, -amount, cur)
   } catch (e) {
     ctx.logger('xiuxian').warn('addStone error:', e)
   }
+}
+
+/** 灵石持有量排行：直接按 monetary 表排序取前 limit 名（只含本货币） */
+export async function getTopStoneHolders(ctx: Context, limit: number): Promise<Array<{ uid: number; value: number }>> {
+  const rows = await ctx.database.get('monetary', { currency: getCurrency(ctx) }, {
+    sort: { value: 'desc' }, limit,
+  })
+  return rows.map(r => ({ uid: r.uid, value: Number(r.value) || 0 }))
 }
 
 export async function costStone(ctx: Context, uid: number, amount: number): Promise<boolean> {
@@ -151,20 +219,79 @@ export async function costStone(ctx: Context, uid: number, amount: number): Prom
   return true
 }
 
+// ======================= 原子更新 =======================
+
+/**
+ * 删除即占用（悬赏令结算的写法）：只有真正删除了目标行的那次请求返回 true。
+ * remove 在各数据库驱动上都是原子的，用于「同一份东西只能被处理一次」的场景。
+ */
+export async function claimByRemove<K extends keyof Tables>(
+  ctx: Context, table: K, query: Query<Tables[K]>,
+): Promise<boolean> {
+  const res = await ctx.database.remove(table, query)
+  return getAffectedRows(res) !== 0
+}
+
+/** 原子增减玩家修为（delta 先向下取整，0 则忽略） */
+export async function addPlayerExp(ctx: Context, uid: number, delta: number): Promise<void> {
+  const d = Math.floor(delta)
+  if (!Number.isFinite(d) || d === 0) return
+  await ctx.database.set(TABLE.player, { uid }, row => ({ exp: $.add(row.exp, d) }))
+}
+
+/** 原子增减玩家宗门贡献（delta 先向下取整，0 则忽略） */
+export async function addPlayerContribution(ctx: Context, uid: number, delta: number): Promise<void> {
+  const d = Math.floor(delta)
+  if (!Number.isFinite(d) || d === 0) return
+  await ctx.database.set(TABLE.player, { uid }, row => ({ sectContribution: $.add(row.sectContribution, d) }))
+}
+
+/** 条件扣减（签到的写法）：仅当贡献 ≥ amount 时原子扣减，返回是否成功 */
+export async function subPlayerContributionIfEnough(ctx: Context, uid: number, amount: number): Promise<boolean> {
+  const a = Math.floor(amount)
+  if (!(a > 0)) return false
+  const res = await ctx.database.set(
+    TABLE.player,
+    { uid, sectContribution: { $gte: a } },
+    row => ({ sectContribution: $.sub(row.sectContribution, a) }),
+  )
+  return getAffectedRows(res) !== 0
+}
+
 // ======================= 属性计算 =======================
 
-function sumModifiers(mods: Modifier[] | undefined, field: string): number {
+function sumModifiers(mods: readonly Modifier[] | undefined, field: string): number {
   if (!mods) return 0
   return mods.filter(m => m.stat === field && (m.mode ?? 'pct') === 'pct')
     .reduce((s, m) => s + m.value, 0)
 }
 
-export async function computeStats(ctx: Context, player: Player): Promise<ComputedStats> {
-  const lv = getLevel(player.level)
-  if (!lv) return { hp: 0, mp: 0, atk: 0, def: 0, spd: 0, crit: 0, critDmg: 0, pen: 0 }
+/** 已实作的辅修效果 → 属性加成（value 为比例，0.05 = 5%）；尚未实作的效果返回 null */
+export function getFuxiuBonus(entry: FuXiuEntry | undefined): { stat: 'hp' | 'atk' | 'lifesteal'; value: number } | null {
+  if (!entry) return null
+  if (entry.effect === 'hpPct') return { stat: 'hp', value: entry.value / 100 }
+  if (entry.effect === 'damageBoost') return { stat: 'atk', value: entry.value / 100 }
+  if (entry.effect === 'lifesteal') return { stat: 'lifesteal', value: entry.value / 100 }
+  return null
+}
 
-  const buff = await getBuff(ctx, player.uid)
-  const learned = await getLearnedSkills(ctx, player.uid)
+/**
+ * 减伤公式：原减伤 + 原减伤×练体% + 原减伤×防具% + 原减伤×生效中减伤神通总和%，上限 100%。
+ * @param baseDef     原减伤%（境界 def）
+ * @param defBonusPct 练体% + 防具%（比例，0.15 = 15%）
+ * @param tempDefSum  战斗中生效的减伤神通总和（比例）
+ */
+export function calcDefensePct(baseDef: number, defBonusPct: number, tempDefSum = 0): number {
+  return Math.min(100, Math.max(0, baseDef * (1 + defBonusPct + tempDefSum)))
+}
+
+/** 读取装备 / 功法 / 练体等数据并计算玩家属性（会查询数据库，不写库） */
+export async function loadAndComputeStats(ctx: Context, player: Player): Promise<ComputedStats> {
+  const lv = getLevel(player.level)
+  if (!lv) return { hp: 0, mp: 0, atk: 0, def: 0, spd: 0, crit: 0, critDmg: 0, pen: 0, baseDef: 0, defBonusPct: 0 }
+
+  const buff = await getOrCreateBuff(ctx, player.uid)
+  const learned = await getLearnedSkillsAndMigrate(ctx, player.uid)
   const modifiers: Modifier[] = []
 
   for (const gid of learned.gongfa) {
@@ -173,19 +300,18 @@ export async function computeStats(ctx: Context, player: Player): Promise<Comput
   }
 
   for (const fid of learned.fuxiu) {
-    const sub = getFuXiu(fid)
-    if (!sub) continue
-    if (sub.effect === 'hpPct') modifiers.push({ stat: 'hp', value: sub.value / 100 })
-    else if (sub.effect === 'damageBoost') modifiers.push({ stat: 'atk', value: sub.value / 100 })
+    const b = getFuxiuBonus(getFuXiu(fid))
+    if (b && b.stat !== 'lifesteal') modifiers.push({ stat: b.stat, value: b.value })
   }
 
-  const w = buff.faqiBuff ? getWeapon(buff.faqiBuff)?.modifiers : []
-  if (w) modifiers.push(...w)
-  const a = buff.armorBuff ? getArmor(buff.armorBuff)?.modifiers : []
-  if (a) modifiers.push(...a)
+  const weaponMods = (buff.faqiBuff ? getWeapon(buff.faqiBuff)?.modifiers : undefined) ?? []
+  modifiers.push(...weaponMods)
+  const armorMods = (buff.armorBuff ? getArmor(buff.armorBuff)?.modifiers : undefined) ?? []
+  modifiers.push(...armorMods)
 
   const body = player.exercisesLevel ? getBodyLevel(player.exercisesLevel) : undefined
-  if (body?.modifiers) modifiers.push(...(body.modifiers as Modifier[]))
+  const bodyMods = (body?.modifiers ?? []) as Modifier[]
+  modifiers.push(...bodyMods)
 
   const bodyName = body?.name || ''
   const res = computeResonance(lv.name, bodyName)
@@ -196,7 +322,6 @@ export async function computeStats(ctx: Context, player: Player): Promise<Comput
 
   const hpMul = 1 + sumModifiers(modifiers, 'hp')
   const mpMul = 1 + sumModifiers(modifiers, 'mp')
-  const defMul = 1 + sumModifiers(modifiers, 'def')
   const spdMul = 1 + sumModifiers(modifiers, 'spd')
 
   const atkFlatBonus = buff.atkBuff || 0
@@ -208,18 +333,23 @@ export async function computeStats(ctx: Context, player: Player): Promise<Comput
   const critDmg = 1.5 + sumModifiers(modifiers, 'critDmg')
   const pen = sumModifiers(modifiers, 'pen')
 
+  // 减伤：只取练体与防具的减伤加乘（各自独立乘区，均乘原减伤）
+  const defBonusPct = sumModifiers(bodyMods, 'def') + sumModifiers(armorMods, 'def')
+
   return {
     hp: Math.round(lv.hp * hpMul),
     mp: Math.round(lv.mp * mpMul),
     atk: Math.round(atk),
-    def: Math.min(95, lv.def * defMul),
+    def: calcDefensePct(lv.def, defBonusPct),
     spd: Math.round(lv.spd * spdMul),
     crit, critDmg, pen,
+    baseDef: lv.def,
+    defBonusPct,
   }
 }
 
 export async function computeCultivateSpeed(ctx: Context, uid: number): Promise<number> {
-  const learned = await getLearnedSkills(ctx, uid)
+  const learned = await getLearnedSkillsAndMigrate(ctx, uid)
   let total = 0
   for (const gid of learned.gongfa) {
     const g = getGongfa(gid)
@@ -231,20 +361,25 @@ export async function computeCultivateSpeed(ctx: Context, uid: number): Promise<
   return total
 }
 
-export async function refreshPlayerStats(ctx: Context, player: Player) {
-  const st = await computeStats(ctx, player)
-  const lv = getLevel(player.level)!
+/**
+ * 重新计算玩家属性并写回数据库。
+ * 会直接修改传入的 player 对象（maxhp / maxmp / atk / hp / mp / power），调用后可沿用该对象。
+ */
+export async function recomputeAndSaveStats(ctx: Context, player: Player): Promise<ComputedStats> {
+  const st = await loadAndComputeStats(ctx, player)
+  const lv = getLevel(player.level)
+  if (!lv) return st
   player.maxhp = Math.floor(st.hp)
   player.maxmp = Math.floor(st.mp)
   player.atk = Math.floor(st.atk)
   player.hp = Math.floor(Math.min(player.hp, st.hp))
   player.mp = Math.floor(Math.min(player.mp, st.mp))
   player.power = Math.round(lv.power * (1 + (st.atk / (lv.atk || 1) - 1) * 0.5))
-  await ctx.database.set('wj6y3_xiuxian_player', { uid: player.uid }, {
+  await ctx.database.set(TABLE.player, { uid: player.uid }, floorRow(TABLE.player, {
     maxhp: player.maxhp, maxmp: player.maxmp,
     atk: player.atk, hp: player.hp, mp: player.mp,
     power: player.power,
-  })
+  }))
   return st
 }
 
@@ -309,14 +444,14 @@ export const ALL_ITEM_TABLES = () => ({
 // ======================= 背包 =======================
 
 export async function addItem(ctx: Context, uid: number, goodsId: number, num = 1) {
-  const exist = await ctx.database.get('wj6y3_xiuxian_back', { uid, goodsId })
+  const exist = await ctx.database.get(TABLE.back, { uid, goodsId })
   if (exist[0]) {
-    await ctx.database.set('wj6y3_xiuxian_back', { uid, goodsId }, {
+    await ctx.database.set(TABLE.back, { uid, goodsId }, {
       goodsNum: exist[0].goodsNum + num,
       updateTime: new Date(),
     })
   } else {
-    await ctx.database.create('wj6y3_xiuxian_back', {
+    await ctx.database.create(TABLE.back, {
       uid, goodsId, goodsNum: num,
       createTime: new Date(), updateTime: new Date(),
       dayNum: 0, allNum: 0, actionTime: new Date(0),
@@ -345,21 +480,69 @@ export async function removeItem(
   num = 1,
   keepEmptyRow = false,
 ): Promise<boolean> {
-  const rows = await ctx.database.get('wj6y3_xiuxian_back', { uid, goodsId })
+  const rows = await ctx.database.get(TABLE.back, { uid, goodsId })
   if (!rows[0] || rows[0].goodsNum < num) return false
 
   if (rows[0].goodsNum === num) {
     if (keepEmptyRow) {
-      await ctx.database.set('wj6y3_xiuxian_back', { uid, goodsId }, { goodsNum: 0 })
+      await ctx.database.set(TABLE.back, { uid, goodsId }, { goodsNum: 0 })
     } else {
-      await ctx.database.remove('wj6y3_xiuxian_back', { uid, goodsId })
+      await ctx.database.remove(TABLE.back, { uid, goodsId })
     }
   } else {
-    await ctx.database.set('wj6y3_xiuxian_back', { uid, goodsId }, {
+    await ctx.database.set(TABLE.back, { uid, goodsId }, {
       goodsNum: rows[0].goodsNum - num,
     })
   }
   return true
+}
+
+// ======================= 整局限次丹药（攻击丹） =======================
+
+/** 该丹药的整局限服次数：目前仅攻击丹（每种 5 次），其余丹药返回 undefined（不限次数） */
+export function getPillUseLimit(meta: { tag?: string } | undefined): number | undefined {
+  return meta?.tag === ATK_PILL_TAG ? ATK_PILL_USE_LIMIT : undefined
+}
+
+export async function getPillUsedCount(ctx: Context, uid: number, pillId: number): Promise<number> {
+  const rows = await ctx.database.get(TABLE.pillLimit, { uid, pillId })
+  return rows[0]?.usedCount ?? 0
+}
+
+export async function addPillUsedCount(ctx: Context, uid: number, pillId: number, n = 1): Promise<void> {
+  const res = await ctx.database.set(TABLE.pillLimit, { uid, pillId }, row => ({ usedCount: $.add(row.usedCount, n) }))
+  if (getAffectedRows(res) === 0) {
+    await ctx.database.create(TABLE.pillLimit, { uid, pillId, usedCount: n })
+  }
+}
+
+/** 一次性迁移：把旧版记在背包行 allNum 上的攻击丹服用次数搬进 pill_limit 表（取较大值），并把旧值清零 */
+export async function migrateLegacyPillCounts(ctx: Context): Promise<number> {
+  const atkPillIds = [...Object.entries(data.pills), ...Object.entries(data.craftPills)]
+    .filter(([, v]) => (v as any)?.tag === ATK_PILL_TAG)
+    .map(([id]) => Number(id))
+  if (!atkPillIds.length) return 0
+  const rows = await ctx.database.get(TABLE.back, { goodsId: { $in: atkPillIds }, allNum: { $gt: 0 } })
+  for (const r of rows) {
+    const used = await getPillUsedCount(ctx, r.uid, r.goodsId)
+    if (r.allNum > used) {
+      await ctx.database.upsert(TABLE.pillLimit, [{ uid: r.uid, pillId: r.goodsId, usedCount: r.allNum }], ['uid', 'pillId'])
+    }
+    await ctx.database.set(TABLE.back, { uid: r.uid, goodsId: r.goodsId }, { allNum: 0 })
+  }
+  return rows.length
+}
+
+// ======================= 忙碌状态（闭关 / 悬赏令） =======================
+
+export type BusyKind = 'closed' | 'bounty'
+
+/** 读取玩家当前的忙碌状态：闭关中 / 悬赏令进行中；空闲返回 null */
+export async function getBusyKind(ctx: Context, uid: number): Promise<BusyKind | null> {
+  const rows = await ctx.database.get(TABLE.cd, { uid })
+  if (rows[0]?.type === 1) return 'closed'
+  if (rows[0]?.type === 2) return 'bounty'
+  return null
 }
 
 // ======================= 战斗前置 =======================
@@ -370,19 +553,22 @@ export interface PlayerBattleReady {
   unit: CombatUnit
 }
 
-export async function preparePlayerBattle(
+/**
+ * 要求玩家已建号（否则与 requirePlayer 一样抛错），并检查能否参战：
+ * 能战斗时返回玩家 / 属性 / 战斗单位，不能战斗时返回提示字符串。
+ */
+export async function requireBattleReadyPlayer(
   ctx: Context,
-  session: Session,
+  session: Session | undefined,
 ): Promise<PlayerBattleReady | string> {
   const player = await requirePlayer(ctx, session)
   if (!Number.isFinite(player.hp)) {
     return '⚠️ 气血数据异常，请联系管理员'
   }
-  const threshold = Math.max(1, Math.floor(player.maxhp * 0.01))
-  if (player.hp < threshold) {
+  if (isBadlyInjured(player.hp, player.maxhp)) {
     return `你身受重伤，请服丹或出关疗伤后再战`
   }
-  const stats = await computeStats(ctx, player)
+  const stats = await loadAndComputeStats(ctx, player)
   const unit = await buildPlayerUnit(ctx, player, stats)
   return { player, stats, unit }
 }
@@ -395,10 +581,15 @@ export interface CombatUnit {
   mp: number; maxmp: number
   atk: number; def: number; spd: number
   crit: number; critDmg: number; pen: number
+  /** 玩家专用：原减伤%（境界 def）；怪物 / BOSS 不设，直接使用 def */
+  baseDef?: number
+  /** 玩家专用：练体% + 防具%（比例） */
+  defBonusPct?: number
   shenTongIds?: number[]
   lifesteal?: number
   tempAtkMul?: number
-  tempDefMul?: number
+  /** 生效中的减伤神通增益总和（比例） */
+  tempDefSum?: number
   tempBuffRemain?: number
   dotList?: Array<{
     multiplier: number
@@ -412,11 +603,11 @@ export interface CombatUnit {
 export interface BattleLogEntry { round: number; text: string }
 
 export async function buildPlayerUnit(ctx: Context, p: Player, st: ComputedStats, name = ''): Promise<CombatUnit> {
-  const learned = await getLearnedSkills(ctx, p.uid)
+  const learned = await getLearnedSkillsAndMigrate(ctx, p.uid)
   let lifesteal = 0
   for (const fid of learned.fuxiu) {
-    const sub = getFuXiu(fid)
-    if (sub?.effect === 'lifesteal') lifesteal += sub.value / 100
+    const b = getFuxiuBonus(getFuXiu(fid))
+    if (b?.stat === 'lifesteal') lifesteal += b.value
   }
 
   const rawHp = p.hp ?? st.hp
@@ -430,10 +621,18 @@ export async function buildPlayerUnit(ctx: Context, p: Player, st: ComputedStats
     maxmp: st.mp,
     atk: st.atk, def: st.def, spd: st.spd,
     crit: st.crit, critDmg: st.critDmg, pen: st.pen,
+    baseDef: st.baseDef,
+    defBonusPct: st.defBonusPct,
     shenTongIds: learned.shentong,
     lifesteal,
     uid: p.uid,
   }
+}
+
+/** 战斗单位当前的减伤%：玩家按减伤公式（含生效中的减伤神通），怪物 / BOSS 沿用自身 def */
+export function getCombatDefensePct(u: CombatUnit): number {
+  if (u.baseDef === undefined) return Math.min(100, Math.max(0, u.def))
+  return calcDefensePct(u.baseDef, u.defBonusPct ?? 0, u.tempDefSum ?? 0)
 }
 
 export function calcOneHit(
@@ -446,20 +645,22 @@ export function calcOneHit(
   const crit = Math.random() < attacker.crit
   if (crit) raw *= attacker.critDmg
   raw *= (0.9 + Math.random() * 0.2)
-  const defReduce = (defender.def / 100) * defFactor * (1 - attacker.pen)
-  const appliedDefReduce = Math.min(0.95, Math.max(0, defReduce))
+  const defReduce = (getCombatDefensePct(defender) / 100) * defFactor * (1 - attacker.pen)
+  const appliedDefReduce = Math.min(1, Math.max(0, defReduce))
   const dmg = Math.max(1, Math.floor(raw * (1 - appliedDefReduce)))
   return { dmg, crit }
 }
 
 const BASIC_ATTACK_WEIGHT = 200
 
+type BattleAction = { kind: 'basic' } | { kind: 'shentong'; id: number }
+
 function pickAction(
   unit: CombatUnit,
   cdMap: Map<number, number>,
-): { kind: 'basic' } | { kind: 'shentong'; id: number } {
-  const pool: Array<{ kind: 'basic'; weight: number } | { kind: 'shentong'; id: number; weight: number }> = [
-    { kind: 'basic', weight: BASIC_ATTACK_WEIGHT },
+): BattleAction {
+  const pool: Array<{ action: BattleAction; weight: number }> = [
+    { action: { kind: 'basic' }, weight: BASIC_ATTACK_WEIGHT },
   ]
   if (unit.shenTongIds && unit.shenTongIds.length > 0) {
     for (const id of unit.shenTongIds) {
@@ -467,16 +668,10 @@ function pickAction(
       const st = getShenTong(id)
       if (!st) continue
       if (unit.mp < st.mpCost * unit.maxmp) continue
-      pool.push({ kind: 'shentong', id, weight: getShenTongWeight(id) })
+      pool.push({ action: { kind: 'shentong', id }, weight: getShenTongWeight(id) })
     }
   }
-  const total = pool.reduce((s, x) => s + x.weight, 0)
-  let r = Math.random() * total
-  for (const x of pool) {
-    r -= x.weight
-    if (r <= 0) return x.kind === 'basic' ? { kind: 'basic' } : { kind: 'shentong', id: x.id }
-  }
-  return { kind: 'basic' }
+  return weightedPick(pool, x => x.weight)?.action ?? { kind: 'basic' }
 }
 
 export function simulateBattle(a: CombatUnit, b: CombatUnit, maxRound = 30): {
@@ -517,7 +712,8 @@ export function simulateBattle(a: CombatUnit, b: CombatUnit, maxRound = 30): {
         att.tempBuffRemain = Math.max(att.tempBuffRemain ?? 0, st.turnCost)
         log.push({ round, text: `${att.name} 施展「${st.name}」，攻击提升 ${Math.floor((st.buffValue ?? 0) * 100)}%（${st.turnCost} 回合）` })
       } else if (st.buffType === 2) {
-        att.tempDefMul = (att.tempDefMul ?? 1) * (1 + (st.buffValue ?? 0))
+        // 减伤神通：增益按「总和」累加，计入减伤公式（原减伤 × 总和）
+        att.tempDefSum = (att.tempDefSum ?? 0) + (st.buffValue ?? 0)
         att.tempBuffRemain = Math.max(att.tempBuffRemain ?? 0, st.turnCost)
         log.push({ round, text: `${att.name} 施展「${st.name}」，减伤提升 ${Math.floor((st.buffValue ?? 0) * 100)}%（${st.turnCost} 回合）` })
       }
@@ -585,7 +781,7 @@ export function simulateBattle(a: CombatUnit, b: CombatUnit, maxRound = 30): {
     for (const u of [a, b]) {
       if (u.tempBuffRemain && u.tempBuffRemain > 0) {
         u.tempBuffRemain -= 1
-        if (u.tempBuffRemain === 0) { u.tempAtkMul = undefined; u.tempDefMul = undefined }
+        if (u.tempBuffRemain === 0) { u.tempAtkMul = undefined; u.tempDefSum = undefined }
       }
       if (u.dotList && u.dotList.length > 0) {
         for (const dot of u.dotList) {
@@ -623,32 +819,25 @@ export interface BattleRecordOptions {
 const BATTLE_RECORD_TTL = 120_000
 const _battleRecords = new Map<number, BattleRecord>()
 
+/** 记录最近一次战斗（120 秒内可查）；过期记录在读取时或由定时清理移除，不再使用全局 setTimeout */
 export function recordBattle(
   uid: number,
   record: BattleRecord,
   options?: BattleRecordOptions,
 ): void {
   _battleRecords.set(uid, record)
-  setTimeout(() => {
-    const cur = _battleRecords.get(uid)
-    if (cur && cur.ts === record.ts) _battleRecords.delete(uid)
-  }, BATTLE_RECORD_TTL)
 
   const oppUid = options?.opponentUid
   if (!oppUid) return
   const flipped: BattleRecord = {
     ts: record.ts,
-    title: options.opponentTitle ?? record.title,
+    title: options?.opponentTitle ?? record.title,
     log: record.log,
     winner: record.winner === 'a' ? 'b' : record.winner === 'b' ? 'a' : 'draw',
     playerName: record.opponentName,
     opponentName: record.playerName,
   }
   _battleRecords.set(oppUid, flipped)
-  setTimeout(() => {
-    const cur = _battleRecords.get(oppUid)
-    if (cur && cur.ts === flipped.ts) _battleRecords.delete(oppUid)
-  }, BATTLE_RECORD_TTL)
 }
 
 export function getBattleRecord(uid: number): BattleRecord | null {
@@ -663,6 +852,18 @@ export function getBattleRecord(uid: number): BattleRecord | null {
 
 export function getBattleRecordTtl(): number {
   return BATTLE_RECORD_TTL
+}
+
+/** 清理已过期的战斗记录（由定时任务调用） */
+export function cleanupBattleRecords(now = Date.now()): void {
+  for (const [uid, rec] of _battleRecords) {
+    if (now - rec.ts > BATTLE_RECORD_TTL) _battleRecords.delete(uid)
+  }
+}
+
+/** 插件卸载时清空全部战斗记录 */
+export function clearBattleRecords(): void {
+  _battleRecords.clear()
 }
 
 // ======================= 每日重置 =======================
@@ -685,7 +886,7 @@ export function getOneShotBreakthroughValue(pill: any): number {
 export async function isOneShotPillUsed(
   ctx: Context, uid: number, pillId: number,
 ): Promise<boolean> {
-  const rows = await ctx.database.get('wj6y3_xiuxian_pill_used', { uid, pillId })
+  const rows = await ctx.database.get(TABLE.pillUsed, { uid, pillId })
   return rows.length > 0
 }
 
@@ -693,7 +894,7 @@ export async function computeOneShotBreakthroughBonus(
   ctx: Context, uid: number, currentLevel: string,
 ): Promise<{ bonus: number; pillIds: number[] }> {
   const targetNext = String(parseInt(currentLevel, 10) + 1)
-  const rows = await ctx.database.get('wj6y3_xiuxian_pill_used', { uid, targetLevelId: targetNext })
+  const rows = await ctx.database.get(TABLE.pillUsed, { uid, targetLevelId: targetNext })
   let bonus = 0
   const pillIds: number[] = []
   for (const r of rows) {
@@ -707,8 +908,8 @@ export async function computeOneShotBreakthroughBonus(
 
 // ======================= 聚灵旗 =======================
 
-const QI_CULTIVATE_PER_LEVEL = 0.1
-const QI_HERB_PER_LEVEL = 0.2
+export const QI_CULTIVATE_PER_LEVEL = 0.1
+export const QI_HERB_PER_LEVEL = 0.2
 
 export interface QiFlagBonus {
   cultivateMul: number
@@ -717,7 +918,7 @@ export interface QiFlagBonus {
 }
 
 export async function getQiFlagBonus(ctx: Context, uid: number): Promise<QiFlagBonus> {
-  const buff = await getBuff(ctx, uid)
+  const buff = await getOrCreateBuff(ctx, uid)
   if (!buff.qiFlagBuff) return { cultivateMul: 1, herbTimeMul: 1, name: '' }
   const flag = data.qiFlags[String(buff.qiFlagBuff)]
   if (!flag) return { cultivateMul: 1, herbTimeMul: 1, name: '' }
@@ -726,7 +927,7 @@ export async function getQiFlagBonus(ctx: Context, uid: number): Promise<QiFlagB
   return { cultivateMul, herbTimeMul, name: flag.name ?? '' }
 }
 
-// ======================= 悬赏令掉落池 =======================
+// ======================= 悬赏令 / 秘境掉落池 =======================
 
 export interface DropEntry {
   category: string
@@ -769,35 +970,45 @@ export function buildDropPool(): CategoryPool {
   return pool
 }
 
-function pickCategory(weights: Record<string, number>, pool: CategoryPool): string | null {
-  const entries = Object.entries(weights).filter(([k, w]) => w > 0 && (pool[k]?.length ?? 0) > 0)
-  if (entries.length === 0) return null
-  const total = entries.reduce((s, [, w]) => s + w, 0)
-  let r = Math.random() * total
-  for (const [k, w] of entries) {
-    r -= w
-    if (r <= 0) return k
-  }
-  return entries[0][0]
-}
-
-function pickItemInCategory(category: string, pool: CategoryPool): DropEntry | null {
-  const items = pool[category] ?? []
-  if (items.length === 0) return null
-  const total = items.reduce((s, it) => s + it.weight, 0)
-  let r = Math.random() * total
-  for (const it of items) {
-    r -= it.weight
-    if (r <= 0) return it
-  }
-  return items[items.length - 1]
-}
-
 export function rollSingleDrop(categoryWeights: Record<string, number>): DropEntry | null {
   const pool = buildDropPool()
-  const cat = pickCategory(categoryWeights, pool)
-  if (!cat) return null
-  return pickItemInCategory(cat, pool)
+  const categories = Object.entries(categoryWeights).filter(([k, w]) => w > 0 && (pool[k]?.length ?? 0) > 0)
+  const picked = weightedPick(categories, ([, w]) => w)
+  if (!picked) return null
+  return weightedPick(pool[picked[0]], it => it.weight) ?? null
+}
+
+/** 掉落类别权重（悬赏令 / 秘境共用）：未配置时使用默认权重 */
+export function getDropCategoryWeights(config: Config): Record<string, number> {
+  const w = config.bountyDropCategoryWeights
+  if (w && typeof w === 'object' && Object.keys(w).length > 0) return w
+  return DEFAULT_DROP_WEIGHTS
+}
+
+/** 按类别权重从全局掉落池抽 count 件 */
+export function rollDrops(categoryWeights: Record<string, number>, count: number): DropEntry[] {
+  const results: DropEntry[] = []
+  for (let i = 0; i < count; i++) {
+    const d = rollSingleDrop(categoryWeights)
+    if (d) results.push(d)
+  }
+  return results
+}
+
+/** 合并同 ID 的掉落，得到 [{ id, name, num }] */
+export function mergeDrops(drops: Array<{ id: number; name: string }>): Array<{ id: number; name: string; num: number }> {
+  const map = new Map<number, { id: number; name: string; num: number }>()
+  for (const d of drops) {
+    const cur = map.get(d.id)
+    if (cur) cur.num += 1
+    else map.set(d.id, { id: d.id, name: d.name, num: 1 })
+  }
+  return [...map.values()]
+}
+
+/** 格式化合并后的掉落：「名称×数量、名称×数量」 */
+export function formatDropList(drops: Array<{ name: string; num: number }>): string {
+  return drops.map(d => `${d.name}×${d.num}`).join('、')
 }
 
 // ======================= 物品名称 =======================
@@ -817,22 +1028,47 @@ export function getItemNameById(goodsId: number | string): string {
   return `#${id}`
 }
 
-// ======================= 属性中文名 =======================
+// ======================= 属性中文名 / 加成格式化 =======================
 
 const STAT_LABEL_MAP: Record<string, string> = {
   hp: '气血', mp: '真元', atk: '攻击', def: '防御', spd: '速度',
   crit: '会心', critDmg: '暴伤', pen: '穿透',
   cultivateSpeed: '修炼速度', exp: '修为',
   breakthroughRate: '突破率', breakthroughBigRate: '大境界突破率',
+  lifesteal: '吸血',
 }
 
 export function statLabel(stat: string): string {
   return STAT_LABEL_MAP[stat] ?? stat
 }
 
-// ======================= 自增 ID =======================
+/**
+ * 把 modifiers 格式化为「气血 +3%、攻击 +5%」。
+ * pct 模式按 digits 位小数显示百分比，flat 模式显示原值；为空时返回 empty。
+ */
+export function formatModifiers(mods: readonly Modifier[] | undefined, digits = 0, empty = '无'): string {
+  if (!mods || mods.length === 0) return empty
+  return mods.map(m => {
+    const isPct = (m.mode ?? 'pct') === 'pct'
+    const val = isPct ? `${(m.value * 100).toFixed(digits)}%` : `${m.value}`
+    return `${statLabel(m.stat)} +${val}`
+  }).join('、')
+}
 
-import type { Tables } from 'koishi'
+// ======================= 宗门职位 =======================
+
+/** 宗门职位名（下标 = 职位值，0 = 散修），由 data/宗門職位.json 生成 */
+export const POSITION_NAMES: readonly string[] = (() => {
+  const names: string[] = ['散修']
+  for (const [name, v] of Object.entries(data.sectPositions)) names[v.position] = name
+  return names
+})()
+
+export function getPositionName(pos: number): string {
+  return POSITION_NAMES[pos] || '未知错误'
+}
+
+// ======================= 自增 ID =======================
 
 export async function getNextId<K extends keyof Tables>(
   ctx: Context,
@@ -929,8 +1165,44 @@ export function estimatePrice(goodsId: number | string): number {
   return Math.max(100, Math.floor(BASE_PRICE / safeWeight))
 }
 
+/** 读取写入结果的影响行数；驱动未提供时返回 -1（调用方按「未知 = 成功」处理） */
 export function getAffectedRows(res: any): number {
   if (!res || typeof res !== 'object') return -1
-  const v = res.modified ?? res.matched ?? res.deleted ?? res.inserted
+  const v = res.modified ?? res.matched ?? res.removed ?? res.inserted
   return typeof v === 'number' ? v : -1
+}
+
+// ======================= 启动时数据归整 =======================
+
+const FLOORED_PRIMARY: Record<keyof typeof FLOORED_FIELDS, readonly string[]> = {
+  wj6y3_xiuxian_player: ['uid'],
+  wj6y3_xiuxian_sect: ['sectId'],
+  wj6y3_xiuxian_buff: ['uid'],
+  wj6y3_xiuxian_boss: ['id'],
+  wj6y3_xiuxian_boss_participant: ['bossId', 'uid'],
+  wj6y3_xiuxian_bank: ['uid'],
+  wj6y3_xiuxian_shop: ['id'],
+}
+
+/** 一次性把各表既有的小数值向下取整（字段改为整数型后，旧数据仍可能残留小数） */
+export async function normalizeFlooredFields(ctx: Context): Promise<number> {
+  let fixed = 0
+  for (const table of Object.keys(FLOORED_FIELDS) as Array<keyof typeof FLOORED_FIELDS>) {
+    const fields = FLOORED_FIELDS[table] as readonly string[]
+    // 表名在此为动态值，minato 无法静态推导行类型，因此以宽松类型读写
+    const db = ctx.database as any
+    const rows: Array<Record<string, unknown>> = await db.get(table, {})
+    for (const row of rows) {
+      const patch: Record<string, number> = {}
+      for (const f of fields) {
+        const v = row[f]
+        if (typeof v === 'number' && Number.isFinite(v) && !Number.isInteger(v)) patch[f] = Math.floor(v)
+      }
+      if (!Object.keys(patch).length) continue
+      const query = Object.fromEntries(FLOORED_PRIMARY[table].map(k => [k, row[k]]))
+      await db.set(table, query, patch)
+      fixed++
+    }
+  }
+  return fixed
 }
