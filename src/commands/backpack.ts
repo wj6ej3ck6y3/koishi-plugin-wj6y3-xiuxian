@@ -123,10 +123,21 @@ function segmentByTier<T>(
   nameOf: (e: T) => string,
   lineOf: (e: T) => string,
   titleOf: (group: string, count: number) => string,
+  rankOf: (id: number) => { group: string; order: number[] } = id => {
+    const r = getTierRank(id)
+    return { group: r.group, order: [r.order] }
+  },
 ): string[] {
+  const cmpOrder = (a: number[], b: number[]) => {
+    for (let i = 0; i < Math.max(a.length, b.length); i++) {
+      const d = (a[i] ?? 0) - (b[i] ?? 0)
+      if (d) return d
+    }
+    return 0
+  }
   const ranked = entries
-    .map(e => ({ e, r: getTierRank(idOf(e)), name: nameOf(e) }))
-    .sort((a, b) => a.r.order - b.r.order || a.name.localeCompare(b.name, 'zh'))
+    .map(e => ({ e, r: rankOf(idOf(e)), name: nameOf(e) }))
+    .sort((a, b) => cmpOrder(a.r.order, b.r.order) || a.name.localeCompare(b.name, 'zh'))
   const groups: { group: string; items: T[] }[] = []
   for (const x of ranked) {
     const last = groups[groups.length - 1]
@@ -139,6 +150,32 @@ function segmentByTier<T>(
 /** 依序发送多段消息 */
 async function sendSegments(session: any, segments: string[]) {
   for (const seg of segments) await session.send(seg)
+}
+
+/** 丹药 tag → [合并段名, 段内排序序号] */
+const PILL_TAG_GROUP: Record<string, [string, number]> = {
+  '回复丹': ['回复丹', 0],
+  '突破丹': ['突破丹・大突破丹', 1],
+  '大突破丹': ['突破丹・大突破丹', 2],
+  '修为丹': ['修为丹・攻击丹', 3],
+  '攻击丹': ['修为丹・攻击丹', 4],
+}
+
+/** 背包中不同类型的分段/排序规则：丹药、药材合并分段，其余仅按类型分组（组内按品阶排序） */
+function bagRankOf(type: string, all: Record<string, any>) {
+  return (id: number): { group: string; order: number[] } => {
+    if (type === 'herb') {
+      const tier = Number(all[id]?.tier) || 1
+      const base = Math.floor((tier - 1) / 3) * 3 + 1
+      return { group: `${base}~${base + 2} 阶`, order: [tier] }
+    }
+    if (type === 'pill') {
+      const meta = all[id]
+      const [group, idx] = PILL_TAG_GROUP[meta?.tag] ?? ['其他丹药', 9]
+      return { group, order: [idx, -(Number(meta?.weight) || 0)] }
+    }
+    return { group: '', order: [getTierRank(id).order] }
+  }
 }
 
 /** 背包分类显示顺序 */
@@ -225,6 +262,7 @@ export function registerBackpackCommands(ctx: Context) {
         segments.push(...segmentByTier(
           group, it => it.goodsId, nameOf, lineOf,
           (g, n) => `🎒 ${label}${g ? ' · ' + g : ''}（${n}）`,
+          bagRankOf(type, all as any),
         ))
       }
       await sendSegments(session, segments)
