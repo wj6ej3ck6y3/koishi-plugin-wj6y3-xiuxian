@@ -7,6 +7,7 @@ import {
   isOneShotBreakthroughPill, isOneShotPillUsed,
   getOneShotBreakthroughValue,
   getQualityLabel,
+  getTierRank,
   statLabel,
   ALL_ITEM_TABLES,
   findItemInBackpack,
@@ -91,6 +92,62 @@ function formatShenTongEffect(st: any): string[] {
   return lines
 }
 
+/** 单条消息的最大字符数（超出则继续分段） */
+const SEGMENT_MAX_CHARS = 1500
+
+/** 把一组行按字数拆成若干段，每段都带标题（续段加「续」） */
+function chunkLines(title: string, lines: string[]): string[] {
+  const out: string[] = []
+  let cur: string[] = []
+  let len = title.length
+  for (const line of lines) {
+    if (cur.length && len + line.length + 1 > SEGMENT_MAX_CHARS) {
+      out.push(`${title}${out.length ? '（续）' : ''}\n` + cur.join('\n'))
+      cur = []
+      len = title.length
+    }
+    cur.push(line)
+    len += line.length + 1
+  }
+  if (cur.length) out.push(`${title}${out.length ? '（续）' : ''}\n` + cur.join('\n'))
+  return out
+}
+
+/**
+ * 按品阶分组分段：先按品阶由低到高排序（同品阶按名称），再按大品阶（人/黄/玄/地/天/仙）分段。
+ * titleOf(group, count) 生成每段标题。
+ */
+function segmentByTier<T>(
+  entries: T[],
+  idOf: (e: T) => number,
+  nameOf: (e: T) => string,
+  lineOf: (e: T) => string,
+  titleOf: (group: string, count: number) => string,
+): string[] {
+  const ranked = entries
+    .map(e => ({ e, r: getTierRank(idOf(e)), name: nameOf(e) }))
+    .sort((a, b) => a.r.order - b.r.order || a.name.localeCompare(b.name, 'zh'))
+  const groups: { group: string; items: T[] }[] = []
+  for (const x of ranked) {
+    const last = groups[groups.length - 1]
+    if (last && last.group === x.r.group) last.items.push(x.e)
+    else groups.push({ group: x.r.group, items: [x.e] })
+  }
+  return groups.flatMap(g => chunkLines(titleOf(g.group, g.items.length), g.items.map(lineOf)))
+}
+
+/** 依序发送多段消息 */
+async function sendSegments(session: any, segments: string[]) {
+  for (const seg of segments) await session.send(seg)
+}
+
+/** 背包分类显示顺序 */
+const BACKPACK_TYPE_ORDER: Array<[string, string]> = [
+  ['gongfa', '功法'], ['fuxiu', '辅修'], ['shentong', '神通'],
+  ['weapon', '武器'], ['armor', '防具'], ['pill', '丹药'],
+  ['herb', '药材'], ['furnace', '炼丹炉'], ['qiflag', '聚灵旗'],
+]
+
 export function findItemByName(name: string): [string, any] | null {
   const all = ALL_ITEM_TABLES()
   for (const [id, v] of Object.entries(all)) {
@@ -145,17 +202,32 @@ export function registerBackpackCommands(ctx: Context) {
       )
 
       const all = ALL_ITEM_TABLES()
-      const lines = visible.map(it => {
+      const nameOf = (it: any) => (all[it.goodsId] as any)?.name ?? `未知#${it.goodsId}`
+      const lineOf = (it: any) => {
         const meta = all[it.goodsId]
-        const name = meta?.name ?? `未知#${it.goodsId}`
         const mark = equippedIds.has(it.goodsId) ? ' [已装备]' : ''
         const quality = getQualityLabel(it.goodsId)
         const qualityStr = quality ? `[${quality}] ` : ''
         const tag = (meta as any)?.tag
         const tagStr = tag ? `【${tag}】` : ''
-        return `· ${qualityStr}${tagStr}${name} ×${it.goodsNum}${mark}`
-      })
-      return `🎒 ${p.userName} 的背包（${visible.length} 类）\n` + lines.join('\n')
+        return `· ${qualityStr}${tagStr}${nameOf(it)} ×${it.goodsNum}${mark}`
+      }
+
+      const known = new Set(BACKPACK_TYPE_ORDER.map(([t]) => t))
+      const types: Array<[string, string]> = [...BACKPACK_TYPE_ORDER, ['__other', '其他']]
+      const segments: string[] = [`🎒 ${p.userName} 的背包（共 ${visible.length} 类）`]
+      for (const [type, label] of types) {
+        const group = visible.filter(it => {
+          const t = (all[it.goodsId] as any)?._type
+          return type === '__other' ? !known.has(t) : t === type
+        })
+        if (!group.length) continue
+        segments.push(...segmentByTier(
+          group, it => it.goodsId, nameOf, lineOf,
+          (g, n) => `🎒 ${label}${g ? ' · ' + g : ''}（${n}）`,
+        ))
+      }
+      await sendSegments(session, segments)
     })
 
   // ===== 卸下 =====
@@ -367,29 +439,29 @@ export function registerBackpackCommands(ctx: Context) {
         }).join('、')
       }
 
-      // 格式化功法列表（带品阶）
-      const formatList = (ids: number[], table: any) => {
-        return ids.map(id => {
-          const item = table[String(id)]
-          if (!item) return null
-          const quality = getQualityLabel(id)
-          const qualityStr = quality ? `[${quality}] ` : ''
-          const modStr = formatMods(item.modifiers)
-          const desc = item.desc ? `（${item.desc}）` : ''
-
-          return `· ${qualityStr}${item.name}${desc}\n   加成：${modStr || '无'}`
-        }).filter(Boolean)
+      // 格式化功法列表（带品阶），按品阶由低到高、大品阶分段
+      const buildSegments = (ids: number[], table: any, label: string): string[] => {
+        const valid = ids.filter(id => table[String(id)])
+        return segmentByTier(
+          valid, id => id, id => table[String(id)].name,
+          id => {
+            const item = table[String(id)]
+            const quality = getQualityLabel(id)
+            const qualityStr = quality ? `[${quality}] ` : ''
+            const modStr = formatMods(item.modifiers)
+            const desc = item.desc ? `（${item.desc}）` : ''
+            return `· ${qualityStr}${item.name}${desc}\n   加成：${modStr || '无'}`
+          },
+          (g, n) => `${label}${g ? ' · ' + g : ''}（${n}）`,
+        )
       }
 
-      const gongfaLines = formatList(learned.gongfa, data.gongfa)
-      const fuxiuLines = formatList(learned.fuxiu, data.fuxiu)
-
-      return [
-        `📖 主功法（${learned.gongfa.length}）`,
-        gongfaLines.length ? gongfaLines.join('\n') : '· 无',
-        `\n📚 辅修功法（${learned.fuxiu.length}）`,
-        fuxiuLines.length ? fuxiuLines.join('\n') : '· 无',
-      ].join('\n')
+      const segments = [
+        ...buildSegments(learned.gongfa, data.gongfa, '📖 主功法'),
+        ...buildSegments(learned.fuxiu, data.fuxiu, '📚 辅修功法'),
+      ]
+      if (!segments.length) return '尚未学习任何功法'
+      await sendSegments(session, segments)
     })
 
   // ===== 我的神通 =====
@@ -398,15 +470,19 @@ export function registerBackpackCommands(ctx: Context) {
       const p = await requirePlayer(ctx, session)
       const learned = await getLearnedSkills(ctx, p.uid)
       if (!learned.shentong.length) return '尚未学习任何神通'
-      const lines = learned.shentong.map(id => {
-        const st = data.shentong[String(id)]
-        if (!st) return null
-        const quality = getQualityLabel(id)
-        const qualityStr = quality ? `（${quality}）` : ''
-        const effectLines = formatShenTongEffect(st)
-        return `· ${st.name}${qualityStr}\n${effectLines.join('\n')}`
-      }).filter(Boolean)
-      return `✨ 已学神通（${learned.shentong.length}）\n` + lines.join('\n')
+      const valid = learned.shentong.filter(id => data.shentong[String(id)])
+      if (!valid.length) return '尚未学习任何神通'
+      const segments = segmentByTier(
+        valid, id => id, id => data.shentong[String(id)].name,
+        id => {
+          const st = data.shentong[String(id)]
+          const quality = getQualityLabel(id)
+          const qualityStr = quality ? `（${quality}）` : ''
+          return `· ${st.name}${qualityStr}\n${formatShenTongEffect(st).join('\n')}`
+        },
+        (g, n) => `✨ 神通${g ? ' · ' + g : ''}（${n}）`,
+      )
+      await sendSegments(session, segments)
     })
 
   // ===== 查看物品 =====

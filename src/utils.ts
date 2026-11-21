@@ -880,6 +880,22 @@ export function getQualityLabel(goodsId: number | string): string {
   return ''
 }
 
+/**
+ * 品阶排序信息：order 升序 = 品阶由低（人）到高（仙）；
+ * group 为分段用的分组名（如「黄阶」「3 阶药材」，无品阶为空串）。
+ */
+export function getTierRank(goodsId: number | string): { group: string; order: number } {
+  const id = String(goodsId)
+  const herb = data.herbs[id]
+  if (herb && typeof herb.tier === 'number') {
+    return { group: `${herb.tier} 阶药材`, order: herb.tier }
+  }
+  const label = getQualityLabel(id)
+  if (!label) return { group: '', order: 0 }
+  const info = (data.tiers as Record<string, { weight: number }>)[label]
+  return { group: label.charAt(0) + '阶', order: info ? -info.weight : 0 }
+}
+
 export function formatRemainTime(remainMs: number): string {
   const remainSec = Math.max(0, remainMs) / 1000
   if (remainSec >= 3600) return `${Math.ceil(remainSec / 3600)} 小时`
