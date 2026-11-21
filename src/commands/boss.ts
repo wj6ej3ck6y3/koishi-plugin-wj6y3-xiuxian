@@ -63,6 +63,29 @@ export function buildWorldBossUnit(name: string, levelId: string): CombatUnit {
   }
 }
 
+/** 生成一只世界 BOSS 并写入数据库（指令与定时任务共用） */
+export async function spawnWorldBoss(ctx: Context): Promise<{ name: string; level: number; maxHp: number }> {
+  const all = await ctx.database.get(TABLE.player, {}, { sort: { exp: 'desc' }, limit: 1 })
+  const topLvId = all[0]?.level || String(WORLD_BOSS_CONFIG.MIN_LEVEL)
+  const level = rollWorldBossLevel(topLvId)
+  const name = WORLD_BOSS_CONFIG.NAMES[Math.floor(Math.random() * WORLD_BOSS_CONFIG.NAMES.length)]
+  const unit = buildWorldBossUnit(name, String(level))
+
+  const id = await getNextId(ctx, TABLE.boss, 'id')
+  await ctx.database.create(TABLE.boss, {
+    id,
+    name, level,
+    hp: unit.maxhp, maxHp: unit.maxhp, atk: unit.atk,
+  })
+  return { name, level, maxHp: unit.maxhp }
+}
+
+/** 是否存在存活（hp > 0）的世界 BOSS */
+export async function hasAliveWorldBoss(ctx: Context): Promise<boolean> {
+  const list = await ctx.database.get(TABLE.boss, {})
+  return list.some(b => b.hp > 0)
+}
+
 // ======================= 最后一击掉落池 =======================
 
 interface BossDropEntry { id: number; name: string; weight: number }
@@ -153,19 +176,8 @@ export function registerBossCommands(ctx: Context) {
 
   ctx.command('创建世界boss', '生成BOSS')
     .action(async () => {
-      const all = await ctx.database.get(TABLE.player, {}, { sort: { exp: 'desc' }, limit: 1 })
-      const topLvId = all[0]?.level || String(WORLD_BOSS_CONFIG.MIN_LEVEL)
-      const bossLv = rollWorldBossLevel(topLvId)
-      const name = WORLD_BOSS_CONFIG.NAMES[Math.floor(Math.random() * WORLD_BOSS_CONFIG.NAMES.length)]
-      const unit = buildWorldBossUnit(name, String(bossLv))
-
-      const id = await getNextId(ctx, TABLE.boss, 'id')
-      await ctx.database.create(TABLE.boss, {
-        id,
-        name, level: bossLv,
-        hp: unit.maxhp, maxHp: unit.maxhp, atk: unit.atk,
-      })
-      return `👹 世界 BOSS「${name}」已生成（境界 ${getLevel(String(bossLv))?.name}，HP ${unit.maxhp}）`
+      const { name, level, maxHp } = await spawnWorldBoss(ctx)
+      return `👹 世界 BOSS「${name}」已生成（境界 ${getLevel(String(level))?.name}，HP ${maxHp}）`
     })
 
   ctx.command('查看世界boss', '查看当前世界 BOSS')

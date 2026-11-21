@@ -7,7 +7,7 @@ import { registerBackpackCommands } from './commands/backpack'
 import { registerSectCommands, settleSectDaily } from './commands/sect'
 import { registerBountyCommands } from './commands/bounty'
 import { registerBankCommands } from './commands/bank'
-import { registerBossCommands } from './commands/boss'
+import { registerBossCommands, spawnWorldBoss, hasAliveWorldBoss } from './commands/boss'
 import { registerRiftCommands } from './commands/rift'
 import { registerAlchemyCommands } from './commands/alchemy'
 import { registerBodyCommands } from './commands/body'
@@ -165,6 +165,19 @@ function setupTimers(ctx: Context, config: Config) {
     logger.debug(`[定时任务] 完成：每日任务总耗时 ${Date.now() - t0}ms`)
   }
 
+  const runWeeklyBoss = async () => {
+    try {
+      if (await hasAliveWorldBoss(ctx)) {
+        logger.debug('[定时任务] 周一世界BOSS：已有存活BOSS，跳过生成')
+        return
+      }
+      const b = await spawnWorldBoss(ctx)
+      logger.info(`[定时任务] 周一世界BOSS：已自动生成「${b.name}」（HP ${b.maxHp}）`)
+    } catch (e: any) {
+      logger.warn(`[定时任务] 周一世界BOSS生成失败: ${e?.message ?? e}`)
+    }
+  }
+
   let cronBound = false
   const bindCron = (scope: Context): boolean => {
     if (cronBound) return true
@@ -173,6 +186,7 @@ function setupTimers(ctx: Context, config: Config) {
     try {
       s.cron('0 0 * * *', () => { logger.debug('[定时任务] cron 触发：0 0 * * *'); return runDaily() })
       s.cron('0 * * * *', () => { logger.debug('[定时任务] cron 触发：0 * * * *'); return runHourly() })
+      s.cron('0 0 * * 1', () => { logger.debug('[定时任务] cron 触发：0 0 * * 1'); return runWeeklyBoss() })
       cronBound = true
       logger.info('定时任务已启用 cron 模式')
       return true
@@ -193,7 +207,10 @@ function setupTimers(ctx: Context, config: Config) {
   ctx.setInterval(async () => {
     if (cronBound) return
     const now = new Date()
-    if (now.getHours() === 0 && now.getMinutes() === 0) await runDaily()
+    if (now.getHours() === 0 && now.getMinutes() === 0) {
+      await runDaily()
+      if (now.getDay() === 1) await runWeeklyBoss()
+    }
   }, 60_000)
 
   ctx.setTimeout(() => {
