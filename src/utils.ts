@@ -883,6 +883,48 @@ export function getBattleRecordTtl(): number {
   return BATTLE_RECORD_TTL
 }
 
+/** 依序发送多段消息（平台限制单条消息长度时使用） */
+export async function sendSegments(session: Session | undefined, segments: string[]) {
+  if (!session) return
+  for (const seg of segments) await session.send(seg)
+}
+
+/** 战斗详情每段包含的回合数（30 回合上限 → 最多 3 段） */
+export const BATTLE_LOG_ROUNDS_PER_SEGMENT = 10
+
+/**
+ * 把战斗记录按回合切成多段文本：每段 BATTLE_LOG_ROUNDS_PER_SEGMENT 个回合。
+ * 首段带标题与胜者；多于一段时每段首行标出「第 x/y 段｜第 a~b 回合」。
+ */
+export function segmentBattleLog(rec: BattleRecord): string[] {
+  const winnerName = rec.winner === 'a' ? rec.playerName
+    : rec.winner === 'b' ? rec.opponentName
+      : '平局'
+
+  const grouped = new Map<number, string[]>()
+  for (const e of rec.log) {
+    if (!grouped.has(e.round)) grouped.set(e.round, [])
+    grouped.get(e.round)!.push(e.text)
+  }
+  const rounds = [...grouped.entries()].sort((a, b) => a[0] - b[0])
+  const total = Math.max(1, Math.ceil(rounds.length / BATTLE_LOG_ROUNDS_PER_SEGMENT))
+
+  const segments: string[] = []
+  for (let i = 0; i < total; i++) {
+    const chunk = rounds.slice(i * BATTLE_LOG_ROUNDS_PER_SEGMENT, (i + 1) * BATTLE_LOG_ROUNDS_PER_SEGMENT)
+    const lines: string[] = []
+    if (i === 0) lines.push(`⚔️ ${rec.title}`, `🏆 ${winnerName} 获胜`, '')
+    if (total > 1 && chunk.length) {
+      lines.push(`📜 战斗详情（第 ${i + 1}/${total} 段｜第 ${chunk[0][0]}~${chunk[chunk.length - 1][0]} 回合）`)
+    }
+    for (const [round, texts] of chunk) {
+      lines.push(`【第 ${round} 回合】`, ...texts.map(t => '  ' + t))
+    }
+    segments.push(lines.join('\n'))
+  }
+  return segments
+}
+
 /** 清理已过期的战斗记录（由定时任务调用） */
 export function cleanupBattleRecords(now = Date.now()): void {
   for (const [uid, rec] of _battleRecords) {

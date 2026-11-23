@@ -21,6 +21,7 @@ import {
   formatPct,
   DUE_PILL_ID,
   formatCompact,
+  sendSegments,
 } from '../utils'
 
 
@@ -158,12 +159,6 @@ function segmentByTier<T>(
     else groups.push({ group: x.r.group, items: [x.e] })
   }
   return groups.flatMap(g => chunkLines(titleOf(g.group, g.items.length), g.items.map(lineOf)))
-}
-
-/** 依序发送多段消息 */
-async function sendSegments(session: Session | undefined, segments: string[]) {
-  if (!session) return
-  for (const seg of segments) await session.send(seg)
 }
 
 /** 丹药 tag → [合并段名, 段内排序序号] */

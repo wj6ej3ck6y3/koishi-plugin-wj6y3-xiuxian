@@ -15,6 +15,8 @@ import {
   truncateDecimal,
   formatPct,
   formatCompact,
+  sendSegments,
+  segmentBattleLog,
   getAffectedRows,
   getSessionUid,
   isSameDay,
@@ -249,32 +251,12 @@ export function registerBaseCommands(ctx: Context, config: Config) {
     })
 
   // ---------- 查看战斗详情 ----------
-  ctx.command('查看战斗详情', '查看最近 120 秒内的战斗记录').alias('战斗详情')
+  ctx.command('查看战斗详情', '查看最近 120 秒内的战斗记录（按每 10 回合分段发送）').alias('战斗详情')
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
       const rec = getBattleRecord(p.uid)
       if (!rec) return '⏱️ 最近 120 秒内没有战斗记录（或已过期）'
-
-      const winnerName = rec.winner === 'a' ? rec.playerName
-        : rec.winner === 'b' ? rec.opponentName
-          : '平局'
-
-      const grouped = new Map<number, string[]>()
-      for (const e of rec.log) {
-        if (!grouped.has(e.round)) grouped.set(e.round, [])
-        grouped.get(e.round)!.push(e.text)
-      }
-      const body = [...grouped.entries()]
-        .sort((a, b) => a[0] - b[0])
-        .map(([round, lines]) => `【第 ${round} 回合】\n${lines.map(t => '  ' + t).join('\n')}`)
-        .join('\n')
-
-      return [
-        `⚔️ ${rec.title}`,
-        `🏆 ${winnerName} 获胜`,
-        '',
-        body,
-      ].join('\n')
+      await sendSegments(session, segmentBattleLog(rec))
     })
 
   // ---------- 改名 ----------
