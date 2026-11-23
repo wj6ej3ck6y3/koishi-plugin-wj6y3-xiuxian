@@ -1,7 +1,10 @@
 import { Context } from 'koishi'
 import { data } from '../data'
 import { TABLE } from '../models'
-import { requirePlayer, addItem, removeItem, getOrCreateBuff } from '../utils'
+import { requirePlayer, addItem, removeItem, getOrCreateBuff, sendSegments } from '../utils'
+
+/** 「炼丹」列表每段发送的丹方条数 */
+const RECIPES_PER_SEGMENT = 15
 
 /**
  * 药材数据格式：
@@ -68,7 +71,10 @@ export function registerAlchemyCommands(ctx: Context) {
         // ✅ 主药 / 辅药分别按「类型 + 药力换算后的株数」筛候选
         const mainCandidates: Array<{ id: string; need: number }> = []
         const auxCandidates: Array<{ id: string; need: number }> = []
-        for (const [hid, num] of have) {
+        // 按药材阶级由低到高遍历：同一丹方优先选用「数量足够」的低阶药材
+        const sortedHave = [...have].sort(([a], [b]) =>
+          (Number(data.herbs[a]?.tier) || 0) - (Number(data.herbs[b]?.tier) || 0) || Number(a) - Number(b))
+        for (const [hid, num] of sortedHave) {
           const herb = data.herbs[hid]
           if (!herb) continue
           if (herb.main?.[1] === mainType) {
@@ -95,17 +101,25 @@ export function registerAlchemyCommands(ctx: Context) {
           mainId: picked.main.id, auxId: picked.aux.id,
           mainNeed: picked.main.need, auxNeed: picked.aux.need,
         })
-        if (list.length >= 20) break
       }
 
       recipeCache.set(p.uid, list)
       if (!list.length) return '背包中没有可炼制的丹方'
-      return '⚗️ 可炼制丹方（发送「炼制 <序号>」）\n' +
-        list.map(r => {
-          const mn = (data.herbs as any)[r.mainId]?.name ?? r.mainId
-          const an = (data.herbs as any)[r.auxId]?.name ?? r.auxId
-          return `${r.index}. ${r.name}（主药：${mn}×${r.mainNeed} / 辅药：${an}×${r.auxNeed}）`
-        }).join('\n')
+      const lines = list.map(r => {
+        const mn = (data.herbs as any)[r.mainId]?.name ?? r.mainId
+        const an = (data.herbs as any)[r.auxId]?.name ?? r.auxId
+        return `${r.index}. ${r.name}（主药：${mn}×${r.mainNeed} / 辅药：${an}×${r.auxNeed}）`
+      })
+      // 每 15 条一段，避免超出平台单条消息长度限制
+      const total = Math.ceil(lines.length / RECIPES_PER_SEGMENT)
+      const segments: string[] = []
+      for (let i = 0; i < total; i++) {
+        const head = total > 1
+          ? `⚗️ 可炼制丹方（第 ${i + 1}/${total} 段，发送「炼制 <序号>」）`
+          : '⚗️ 可炼制丹方（发送「炼制 <序号>」）'
+        segments.push(head + '\n' + lines.slice(i * RECIPES_PER_SEGMENT, (i + 1) * RECIPES_PER_SEGMENT).join('\n'))
+      }
+      await sendSegments(session, segments)
     })
 
   ctx.command('炼制 <no:number>', '炼制')

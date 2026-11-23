@@ -735,7 +735,7 @@
     "craft": {
       "timeSec": 60,
       "exp": 10,
-      "successCap": 10,
+      "successCap": 100,
       "mainType": 2,
       "mainCount": 6,
       "auxType": 6,

@@ -31,10 +31,19 @@ function formatInterestLines(s: SettleResult, cap: number, header = `💹 结算
   return lines
 }
 
+/** 解析数量参数：all/ALL → Infinity（全部）；正数向下取整；其余（含 0、负数、非数字）→ null */
+export function parseAmount(raw: unknown): number | null {
+  const s = String(raw ?? '').trim()
+  if (/^all$/i.test(s)) return Infinity
+  const n = Math.floor(Number(s))
+  return s !== '' && Number.isFinite(n) && n > 0 ? n : null
+}
+
 export function registerBankCommands(ctx: Context) {
   ctx.command('灵庄帮助', '灵庄帮助')
     .action(async () => [
-      '灵庄存灵石 <数量>  灵庄取灵石 <数量>',
+      '灵庄存灵石 [数量|all]  灵庄取灵石 [数量|all]',
+      '（数量超出持有/存款，或填 all，则存入/取出全部）',
       '灵庄结算  灵庄升级  灵庄信息',
     ].join('\n'))
 
@@ -86,17 +95,17 @@ export function registerBankCommands(ctx: Context) {
   }
 
   // ✅ B1：先按原始存款算利息 → 再存入 → 再区分利息能存多少
-  ctx.command('灵庄存灵石 <amount:number>', '存灵石')
+  ctx.command('灵庄存灵石 <amount:string>', '存灵石（数量大于持有量或填 all 则存入全部）')
     .alias('存灵石').alias('存入灵石')
     .action(async ({ session }, rawAmount) => {
-      const amount = Math.floor(Number(rawAmount))
-      if (!amount || amount <= 0) return '请输入数量'
+      const want = parseAmount(rawAmount)
+      if (want === null) return '请输入数量或all'
       const p = await requirePlayer(ctx, session)
 
       const balance = await getStone(ctx, p.uid)
-      if (balance < amount) {
-        return `⚠️ 灵石不足（当前 ${formatCompact(balance)}，需 ${formatCompact(amount)}）`
-      }
+      if (balance <= 0) return '当前没有灵石可存入'
+      // 超出持有量或 all：存入全部灵石
+      const amount = Math.min(want, balance)
 
       const bank = await load(ctx, p.uid)
       const cfg = levelOf(bank)
@@ -147,17 +156,20 @@ export function registerBankCommands(ctx: Context) {
       return lines.join('\n')
     })
 
-  ctx.command('灵庄取灵石 <amount:number>', '取灵石')
+  ctx.command('灵庄取灵石 <amount:string>', '取灵石（数量大于存款量或填 all 则取出全部）')
     .alias('取灵石').alias('取出灵石')
     .action(async ({ session }, rawAmount) => {
-      const amount = Math.floor(Number(rawAmount))
-      if (!amount || amount <= 0) return '请输入数量'
+      const want = parseAmount(rawAmount)
+      if (want === null) return '请输入数量或all'
       const p = await requirePlayer(ctx, session)
       const bank = await load(ctx, p.uid)
       const cfg = levelOf(bank)
 
       const s = await settle(ctx, p.uid, bank)
       const settleLines = formatInterestLines(s, cfg.cap)
+      if (bank.saveStone <= 0) return [...settleLines, '灵庄没有存款可取'].join('\n')
+      // 超出存款量或 all：取出全部存款（settle 已同步更新 bank.saveStone）
+      const amount = Math.min(want, bank.saveStone)
 
       // 条件扣减（签到的写法）：存款 ≥ amount 才扣减成功，成功后才发放灵石
       const res = await ctx.database.set(TABLE.bank, {
@@ -165,8 +177,7 @@ export function registerBankCommands(ctx: Context) {
         saveStone: { $gte: amount },
       }, row => ({ saveStone: $.sub(row.saveStone, amount) }))
       if (getAffectedRows(res) === 0) {
-        const [now] = await ctx.database.get(TABLE.bank, { uid: p.uid })
-        return [...settleLines, `⚠️ 存款不足（当前 ${formatCompact(now?.saveStone ?? bank.saveStone)}，需 ${formatCompact(amount)}）`].join('\n')
+        return [...settleLines, '灵庄状态已变化，请重试'].join('\n')
       }
       await addStone(ctx, p.uid, amount)
       const [after] = await ctx.database.get(TABLE.bank, { uid: p.uid })
