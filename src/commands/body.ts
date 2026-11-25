@@ -5,8 +5,8 @@ import { requirePlayer, costStone, recomputeAndSaveStats, formatModifiers, forma
 
 export function registerBodyCommands(ctx: Context) {
   ctx.command('炼体帮助', '炼体说明').action(() => [
-    '🗿 炼体      查看当前炼体境界',
-    '炼体突破    冲击下一层（消耗灵石 + 概率成功）',
+    '🗿 炼体，查看当前炼体境界',
+    '炼体突破，冲击下一层，消耗灵石，有概率成功',
   ].join('\n'))
 
   ctx.command('炼体', '查看炼体信息').alias('查看炼体').alias('炼体信息')

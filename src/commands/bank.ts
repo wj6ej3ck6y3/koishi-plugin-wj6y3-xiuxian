@@ -1,6 +1,6 @@
 import { $, Context } from 'koishi'
 import { TABLE, BankRow } from '../models'
-import { requirePlayer, getStone, addStone, costStone, getAffectedRows, formatCompact } from '../utils'
+import { requirePlayer, getStone, addStone, costStone, getAffectedRows, formatCompact, parseAmount } from '../utils'
 
 const LEVELS = [
   { lv: 1, cap: 1_000_000, ratePerHour: 0.001, upFee: 0 },
@@ -31,19 +31,11 @@ function formatInterestLines(s: SettleResult, cap: number, header = `💹 结算
   return lines
 }
 
-/** 解析数量参数：all/ALL → Infinity（全部）；正数向下取整；其余（含 0、负数、非数字）→ null */
-export function parseAmount(raw: unknown): number | null {
-  const s = String(raw ?? '').trim()
-  if (/^all$/i.test(s)) return Infinity
-  const n = Math.floor(Number(s))
-  return s !== '' && Number.isFinite(n) && n > 0 ? n : null
-}
-
 export function registerBankCommands(ctx: Context) {
   ctx.command('灵庄帮助', '灵庄帮助')
     .action(async () => [
-      '灵庄存灵石 [数量|all]  灵庄取灵石 [数量|all]',
-      '（数量超出持有/存款，或填 all，则存入/取出全部）',
+      '灵庄存灵石 [数量|all]，数量超出持有量或填 all 则存入全部',
+      '灵庄取灵石 [数量|all]，数量超出存款量或填 all 则取出全部',
       '灵庄结算  灵庄升级  灵庄信息',
     ].join('\n'))
 
@@ -95,7 +87,7 @@ export function registerBankCommands(ctx: Context) {
   }
 
   // ✅ B1：先按原始存款算利息 → 再存入 → 再区分利息能存多少
-  ctx.command('灵庄存灵石 <amount:string>', '存灵石（数量大于持有量或填 all 则存入全部）')
+  ctx.command('灵庄存灵石 <amount:string>', '存灵石，数量大于持有量或填 all 则存入全部')
     .alias('存灵石').alias('存入灵石')
     .action(async ({ session }, rawAmount) => {
       const want = parseAmount(rawAmount)
@@ -156,7 +148,7 @@ export function registerBankCommands(ctx: Context) {
       return lines.join('\n')
     })
 
-  ctx.command('灵庄取灵石 <amount:string>', '取灵石（数量大于存款量或填 all 则取出全部）')
+  ctx.command('灵庄取灵石 <amount:string>', '取灵石，数量大于存款量或填 all 则取出全部')
     .alias('取灵石').alias('取出灵石')
     .action(async ({ session }, rawAmount) => {
       const want = parseAmount(rawAmount)

@@ -301,7 +301,7 @@ export function registerBackpackCommands(ctx: Context) {
     })
 
   // ===== 使用（每次固定 1 份） =====
-  ctx.command('使用 <name:string>', '使用 / 学习物品（每次使用 1 份）')
+  ctx.command('使用 <name:string>', '使用 / 学习物品，每次使用 1 份')
     .action(async ({ session }, name) => {
       if (!name) return '请输入要使用的物品名称'
       const p = await requirePlayer(ctx, session)

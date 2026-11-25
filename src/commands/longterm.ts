@@ -90,7 +90,7 @@ async function resetPlayerProgress(
 
 export function registerLongtermCommands(ctx: Context, config: Config) {
 
-  ctx.command('重入仙途 [confirm:string]', '彻底重置修仙之路（保留宗门与职位）')
+  ctx.command('重入仙途 [confirm:string]', '彻底重置修仙之路，保留宗门与职位')
     .action(async ({ session }, confirm) => {
       if (confirm !== '确认') {
         return [
@@ -207,7 +207,7 @@ export function registerLongtermCommands(ctx: Context, config: Config) {
     })
 
   // 双修
-  ctx.command('双修', '与道侣双修（每日 3 次，只计发起者）')
+  ctx.command('双修', '与道侣双修，每日 3 次，只计发起者')
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
       const targetUid = await resolveAtUid(ctx, session)

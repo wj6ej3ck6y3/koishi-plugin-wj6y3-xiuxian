@@ -890,6 +890,14 @@ export async function sendSegments(session: Session | undefined, segments: strin
 }
 
 /** 战斗详情每段包含的回合数（30 回合上限 → 最多 3 段） */
+/** 解析数量参数：all/ALL → Infinity（全部）；正数向下取整；其余（含 0、负数、非数字）→ null */
+export function parseAmount(raw: unknown): number | null {
+  const s = String(raw ?? '').trim()
+  if (/^all$/i.test(s)) return Infinity
+  const n = Math.floor(Number(s))
+  return s !== '' && Number.isFinite(n) && n > 0 ? n : null
+}
+
 export const BATTLE_LOG_ROUNDS_PER_SEGMENT = 10
 
 /**

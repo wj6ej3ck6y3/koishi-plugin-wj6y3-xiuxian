@@ -42,9 +42,9 @@ export function registerAlchemyCommands(ctx: Context) {
   ctx.on('dispose', () => recipeCache.clear())
 
   ctx.command('炼丹帮助', '炼丹指令').action(() => [
-    '炼丹          扫描背包列出可炼制丹方',
-    '炼制 <序号>   炼制指定丹方',
-    '炼丹配方帮助   配方规则说明',
+    '炼丹，扫描背包列出可炼制丹方',
+    '炼制 [序号]，炼制指定丹方',
+    '炼丹配方帮助，配方规则说明',
   ].join('\n'))
 
   ctx.command('炼丹配方帮助', '机制说明').action(() => [
@@ -115,8 +115,8 @@ export function registerAlchemyCommands(ctx: Context) {
       const segments: string[] = []
       for (let i = 0; i < total; i++) {
         const head = total > 1
-          ? `⚗️ 可炼制丹方（第 ${i + 1}/${total} 段，发送「炼制 <序号>」）`
-          : '⚗️ 可炼制丹方（发送「炼制 <序号>」）'
+          ? `⚗️ 可炼制丹方（第 ${i + 1}/${total} 段，发送「炼制 [序号]」）`
+          : '⚗️ 可炼制丹方（发送「炼制 [序号]」）'
         segments.push(head + '\n' + lines.slice(i * RECIPES_PER_SEGMENT, (i + 1) * RECIPES_PER_SEGMENT).join('\n'))
       }
       await sendSegments(session, segments)

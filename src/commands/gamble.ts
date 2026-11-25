@@ -263,7 +263,7 @@ export function registerGambleCommands(ctx: Context) {
     })
 
   // ===== 抢灵石 =====
-  ctx.command('抢灵石', '打劫对方灵石（PvP 战斗）')
+  ctx.command('抢灵石', '打劫对方灵石，PvP 战斗')
     .alias('打劫').alias('抢夺灵石')
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)

@@ -113,14 +113,22 @@ export async function settleSectDaily(ctx: Context, onlySectId?: number): Promis
 export function registerSectCommands(ctx: Context) {
   // ================= 帮助 =================
   ctx.command('宗门帮助', '宗门指令列表').action(() => [
-    '创建宗门 [名称]    我的宗门    宗门列表    加入宗门 [编号/名称]',
-    '宗门捐献 [灵石数]（10 灵石 = 1 贡献）    宗门成员查看    退出宗门',
-    '宗门职位变更 <2-5> [@成员]（只能调整比自己低阶的成员）    踢出宗门 [@成员]    宗主传位 [@成员]',
-    '宗门每日供奉',
-    '宗门贡献兑换 灵石 <贡献数>（10 贡献 = 1 灵石）',
-    '宗门贡献兑换 修为 <贡献数>（5 贡献 = 1 修为）',
-    '宗门贡献兑换 丹药 [颗数]（200 贡献 = 1 颗回复丹）',
-    '接取宗门任务    完成宗门任务（12 小时冷却）',
+    '创建宗门 [名称]，创建宗门',
+    '我的宗门，查看宗门信息',
+    '宗门列表，查看所有宗门',
+    '加入宗门 [编号/名称]，加入指定宗门',
+    '宗门捐献 [灵石数]，10 灵石 = 1 贡献',
+    '宗门成员查看，查看本宗门成员',
+    '退出宗门，退出当前宗门',
+    '宗门职位变更 [2-5] [@成员]，只能调整比自己低阶的成员',
+    '踢出宗门 [@成员]，踢出成员',
+    '宗主传位 [@成员]，转让宗主',
+    '宗门每日供奉，领取供奉灵石',
+    '宗门贡献兑换 灵石 [贡献数]，10 贡献 = 1 灵石',
+    '宗门贡献兑换 修为 [贡献数]，5 贡献 = 1 修为',
+    '宗门贡献兑换 丹药 [颗数]，200 贡献 = 1 颗回复丹',
+    '接取宗门任务，12 小时冷却',
+    '完成宗门任务，挑战任务妖兽',
   ].join('\n'))
 
   // ================= 创建 =================
@@ -202,7 +210,7 @@ export function registerSectCommands(ctx: Context) {
     })
 
   // ================= 捐献 =================
-  ctx.command('宗门捐献 <amount:number>', '捐献灵石（10 灵石 = 1 贡献）')
+  ctx.command('宗门捐献 <amount:number>', '捐献灵石，10 灵石 = 1 贡献')
     .action(async ({ session }, amount) => {
       if (!amount || amount <= 0) return '请输入正整数'
       const p = await requirePlayer(ctx, session)
@@ -239,7 +247,7 @@ export function registerSectCommands(ctx: Context) {
     })
 
   // ================= 职位变更 =================
-  ctx.command('宗门职位变更 <pos:number>', '调整比自己低阶的成员职位（2-5）').alias('宗门职位调整')
+  ctx.command('宗门职位变更 <pos:number>', '调整比自己低阶的成员职位，职位填 2-5').alias('宗门职位调整')
     .action(async ({ session }, rawPos) => {
       const p = await requirePlayer(ctx, session)
       if (!p.sectId) return '未加入宗门'
@@ -379,7 +387,7 @@ export function registerSectCommands(ctx: Context) {
     })
 
   // ================= 贡献兑换 =================
-  ctx.command('宗门贡献兑换 <type:string> [count:posint]', '兑换（灵石/修为填要花的贡献数，丹药填颗数）').alias('贡献兑换')
+  ctx.command('宗门贡献兑换 <type:string> [count:posint]', '兑换，灵石/修为填要花的贡献数，丹药填颗数').alias('贡献兑换')
     .action(async ({ session }, type, count) => {
       const p = await requirePlayer(ctx, session)
       if (!p.sectContribution || p.sectContribution <= 0) return '没有贡献'
@@ -445,7 +453,7 @@ export function registerSectCommands(ctx: Context) {
     })
 
   // ================= 接取宗门任务 =================
-  ctx.command('接取宗门任务', '接宗门任务（12 小时冷却）').alias('宗门任务接取')
+  ctx.command('接取宗门任务', '接宗门任务，12 小时冷却').alias('宗门任务接取')
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
       if (!p.sectId) return '未加入宗门'

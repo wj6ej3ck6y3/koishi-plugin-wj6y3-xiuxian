@@ -6,17 +6,28 @@ import {
   getQiFlagBonus,
   formatRemainTime,
   getQualityLabel,
+  sendSegments,
   formatCompact,
+  getAffectedRows,
+  parseAmount,
 } from '../utils'
 
 const PLOT_COST = (idx: number) => 1_000_000 * Math.pow(2, idx - 2)
 const SPOT_LEVEL_COST = (lv: number) => 500_000 * Math.pow(2, lv)
 
+/** 指定了具体数量却没种够时的补充说明（all 种满或耗尽属预期，不提示） */
+function stopNote(want: number, done: number, freePlots: number, held: number): string {
+  if (!Number.isFinite(want) || done >= want) return ''
+  if (freePlots <= held && freePlots < want) return `\n灵田已种满，剩余 ${want - done} 株未种`
+  return '\n药材已耗尽'
+}
+
 export function registerSpotCommands(ctx: Context) {
   ctx.command('洞府帮助', '洞天指令').action(() => [
     '开辟洞府 [名称]   灵气升级   开垦灵田',
-    '灵田种植 [药材]   灵田收获 [编号]   查看灵田',
-    '洞府信息   洞府改名 <名称>'
+    '灵田种植 [药材] [数量|all]，数量默认 1，填 all 则种满或药材耗尽',
+    '灵田收获 [编号]   查看灵田',
+    '洞府信息   洞府改名 [名称]'
   ].join('\n'))
 
   ctx.command('开辟洞府 [name:string]', '开辟个人洞府').alias('洞府开辟')
@@ -64,8 +75,8 @@ export function registerSpotCommands(ctx: Context) {
     })
 
   // ================= 灵田种植 =================
-  ctx.command('灵田种植 [herb:string]', '种植').alias('洞府种植')
-    .action(async ({ session }, herb) => {
+  ctx.command('灵田种植 [herb:string] [amount:string]', '种植，数量默认 1，填 all 则种满或药材耗尽').alias('洞府种植')
+    .action(async ({ session }, herb, rawAmount) => {
       const p = await requirePlayer(ctx, session)
       if (!p.blessedSpotFlag) return '尚未开辟洞府'
 
@@ -74,41 +85,83 @@ export function registerSpotCommands(ctx: Context) {
         const herbs = items.filter(i => !!data.herbs[String(i.goodsId)])
         if (!herbs.length) return '背包里没有可种植的药材'
 
-        // 格式化每个药材：带品阶 + 名称 + 数量
-        const formatted = herbs.map(i => {
-          const herbData = data.herbs[String(i.goodsId)]
-          const quality = getQualityLabel(i.goodsId) // 返回如 "1 阶药材"
-          const qStr = quality ? `[${quality}] ` : ''
-          return `${qStr}${herbData.name}×${i.goodsNum}`
-        })
-
-        // 每行显示两个，用竖线或空格隔开
-        const lines: string[] = []
-        for (let i = 0; i < formatted.length; i += 2) {
-          lines.push(formatted.slice(i, i + 2).join('  ｜  '))
+        // 按阶数 1~3 / 4~6 / 7~9 分为三组（与背包药材分段一致），组内按阶数、ID 升序
+        const groups: Array<typeof herbs> = [[], [], []]
+        const sorted = [...herbs].sort((a, b) =>
+          (data.herbs[String(a.goodsId)].tier - data.herbs[String(b.goodsId)].tier) || (a.goodsId - b.goodsId))
+        for (const i of sorted) {
+          const g = Math.min(2, Math.max(0, Math.floor(((Number(data.herbs[String(i.goodsId)].tier) || 1) - 1) / 3)))
+          groups[g].push(i)
         }
+        const nonEmpty = groups.map((items, g) => ({ items, g })).filter(x => x.items.length)
 
-        return '🌱 背包可种植药材：\n' + lines.join('\n')
+        const segments = nonEmpty.map(({ items, g }) => {
+          // 格式化每个药材：带品阶 + 名称 + 数量，每行显示两个
+          const formatted = items.map(i => {
+            const quality = getQualityLabel(i.goodsId) // 返回如 "1 阶药材"
+            const qStr = quality ? `[${quality}] ` : ''
+            return `${qStr}${data.herbs[String(i.goodsId)].name}×${i.goodsNum}`
+          })
+          const lines: string[] = []
+          for (let k = 0; k < formatted.length; k += 2) lines.push(formatted.slice(k, k + 2).join('  ｜  '))
+          const head = nonEmpty.length > 1
+            ? `🌱 背包可种植药材（第 ${nonEmpty.findIndex(x => x.g === g) + 1}/${nonEmpty.length} 段｜${g * 3 + 1}~${g * 3 + 3} 阶）`
+            : '🌱 背包可种植药材：'
+          return head + '\n' + lines.join('\n')
+        })
+        await sendSegments(session, segments)
+        return
       }
 
       const entry = Object.entries(data.herbs).find(([, v]: any) => v.name === herb)
       if (!entry) return '未找到该药材'
       const [herbId, herbData]: any = entry
-      const plots = await ctx.database.get(TABLE.plot, { uid: p.uid, plantId: 0 })
+      // 数量：未输入默认 1；all/ALL 为尽可能多
+      const want = rawAmount === undefined || String(rawAmount).trim() === '' ? 1 : parseAmount(rawAmount)
+      if (want === null) return '请输入数量或all'
+
+      const plots = (await ctx.database.get(TABLE.plot, { uid: p.uid, plantId: 0 }))
+        .sort((a, b) => a.plotIndex - b.plotIndex)
       if (!plots.length) return '没有空闲灵田'
-      if (!(await removeItem(ctx, p.uid, Number(herbId), 1))) return '背包中没有该药材'
+      const [held] = await ctx.database.get(TABLE.back, { uid: p.uid, goodsId: Number(herbId) })
+      if (!held || held.goodsNum <= 0) return '背包中没有该药材'
+
+      // 实际种植数 = min(想种数量, 空闲灵田数, 持有量)
+      const n = Math.min(want, plots.length, held.goodsNum)
+      if (!(await removeItem(ctx, p.uid, Number(herbId), n))) return '背包中没有该药材'
 
       const qiBonus = await getQiFlagBonus(ctx, p.uid)
       const baseMinutes = herbData.tier * 30
       const minutes = Math.max(1, Math.floor(baseMinutes * qiBonus.herbTimeMul))
+      const plantAt = new Date()
 
-      await ctx.database.set(TABLE.plot, { uid: p.uid, plotIndex: plots[0].plotIndex }, {
-        plantId: Number(herbId), plantAt: new Date(), plantMinutes: minutes,
-      })
+      // 依序条件写入（plantId 仍为 0 才种下）；并发被占用的灵田跳过并顺延到下一块空闲灵田，
+      // 直到种够 n 株或没有空闲灵田为止，最后退还未种下的药材
+      const planted: number[] = []
+      for (const plot of plots) {
+        if (planted.length >= n) break
+        const res = await ctx.database.set(TABLE.plot, { uid: p.uid, plotIndex: plot.plotIndex, plantId: 0 }, {
+          plantId: Number(herbId), plantAt, plantMinutes: minutes,
+        })
+        if (getAffectedRows(res) !== 0) planted.push(plot.plotIndex)
+      }
+      const refund = n - planted.length
+      if (refund > 0) await addItem(ctx, p.uid, Number(herbId), refund)
+      if (!planted.length) return '灵田状态已变化，请重试'
+
       const flagNote = qiBonus.herbTimeMul < 1
         ? `（聚灵旗加速，原需 ${baseMinutes} 分钟）`
         : ''
-      return `🌱 已在灵田 #${plots[0].plotIndex} 种植「${herb}」（${minutes} 分钟后成熟${flagNote}）`
+      const tail = (refund > 0 ? `\n无空闲灵田，剩余 ${refund} 份药材已退回背包` : '') +
+        stopNote(want, planted.length + refund, plots.length, held.goodsNum)
+      if (planted.length === 1) {
+        return `🌱 已在灵田 #${planted[0]} 种植「${herb}」（${minutes} 分钟后成熟${flagNote}）` + tail
+      }
+      const contiguous = planted.every((v, i) => i === 0 || v === planted[i - 1] + 1)
+      const where = contiguous
+        ? `#${planted[0]} ~ #${planted[planted.length - 1]}`
+        : planted.slice(0, 5).map(v => `#${v}`).join('、') + (planted.length > 5 ? ' 等' : '')
+      return `🌱 已种植「${herb}」×${planted.length}（灵田 ${where}，${minutes} 分钟后成熟${flagNote}）` + tail
     })
 
   // ================= 灵田收获 =================

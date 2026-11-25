@@ -70,7 +70,7 @@ export function registerShopCommands(ctx: Context) {
       return `✅ 购买成功，花费 ${formatCompact(s.price)} 灵石，获得 ${qualityStr}「${name}」×${s.goodsNum}`
     })
 
-  ctx.command('坊市上架 <name:string> <price:number>', '上架（价格最低 1 灵石，小数部分舍去）')
+  ctx.command('坊市上架 <name:string> <price:number>', '上架，价格最低 1 灵石，小数部分舍去')
     .action(async ({ session }, name, price) => {
       if (!name || !price) return '格式：坊市上架 [物品名称] [价格]'
       const p = await requirePlayer(ctx, session)
@@ -112,7 +112,7 @@ export function registerShopCommands(ctx: Context) {
       return '✅ 已下架'
     })
 
-  ctx.command('系统坊市上架 <name:string> <price:number>', '管理员上架（价格最低 1 灵石，小数部分舍去）', { authority: 5 })
+  ctx.command('系统坊市上架 <name:string> <price:number>', '管理员上架，价格最低 1 灵石，小数部分舍去', { authority: 5 })
     .action(async (_, name, price) => {
       if (!name) return '请输入物品名称'
       const found = findItemByName(name)
@@ -133,7 +133,7 @@ export function registerShopCommands(ctx: Context) {
     })
 
   // ===== 系统回收（玩家将背包物品按半价卖给系统） =====
-  ctx.command('系统回收 <name:string> [count:number]', '按半价向系统出售背包物品（装备中的物品不可回收）')
+  ctx.command('系统回收 <name:string> [count:number]', '按半价向系统出售背包物品，装备中的物品不可回收')
     .action(async ({ session }, name, count = 1) => {
       if (!name) return '请输入要回收的物品名称'
       const p = await requirePlayer(ctx, session)

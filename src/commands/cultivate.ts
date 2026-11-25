@@ -155,7 +155,7 @@ export function registerCultivateCommands(ctx: Context, config: Config) {
     .action(async ({ session }) => doBreakthrough(ctx, config, session, false))
 
   // ---------- 渡厄突破 ----------
-  ctx.command('渡厄突破', '消耗渡厄丹突破（失败不扣修为）')
+  ctx.command('渡厄突破', '消耗渡厄丹突破，失败不扣修为')
     .action(async ({ session }) => doBreakthrough(ctx, config, session, true))
 
   // ---------- 抑制黑暗动乱 ----------

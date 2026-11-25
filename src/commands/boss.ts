@@ -257,9 +257,9 @@ async function addBossDamage(ctx: Context, bossId: number, uid: number, platform
 
 export function registerBossCommands(ctx: Context) {
   ctx.command('世界boss帮助', 'BOSS 说明').action(() => [
-    '查看世界boss',
-    '讨伐世界boss [编号]',
-    '创建世界boss（管理）',
+    '查看世界boss，查看当前世界 BOSS',
+    '讨伐世界boss [编号]，讨伐 BOSS',
+    '创建世界boss，生成 BOSS，仅管理员可用',
   ].join('\n'))
 
   ctx.command('创建世界boss', '生成BOSS', { authority: 5 })

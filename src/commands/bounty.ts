@@ -224,11 +224,11 @@ async function trySettleBounty(
 export function registerBountyCommands(ctx: Context, config: Config) {
   ctx.command('悬赏令帮助', '玩法说明').action(() =>
     [
-      '悬赏令            查看当前刷出的 3 个悬赏令（若进行中悬赏已到期会自动结算，默认给修为）',
-      '悬赏令刷新        重新生成 3 个（每日 3 次免费，超出 1000 灵石）',
-      '悬赏令接取 [序号]  接取对应悬赏令',
-      '悬赏令结算 [灵石] 到期结算（不填默认给修为，填"灵石"则给灵石）',
-      '悬赏令终止        中止任务（罚 500000 灵石）',
+      '悬赏令，查看当前刷出的 3 个悬赏令，进行中悬赏已到期会自动结算，默认给修为',
+      '悬赏令刷新，重新生成 3 个，每日 3 次免费，超出 1000 灵石',
+      '悬赏令接取 [序号]，接取对应悬赏令',
+      '悬赏令结算 [灵石]，到期结算，不填默认给修为，填「灵石」则给灵石',
+      '悬赏令终止，中止任务，罚 500000 灵石',
       `每个悬赏令有 ${config.bountyDropChance}% 概率附带 1~${config.bountyDropCount} 件掉落`,
     ].join('\n')
   )
@@ -270,7 +270,7 @@ export function registerBountyCommands(ctx: Context, config: Config) {
       }
 
       return prefix + '📜 当前悬赏令：\n' + formatBountyList(list, parseInt(p.level, 10) || 1) +
-        '\n\n发送「悬赏令接取 <1~3>」接取对应悬赏令'
+        '\n\n发送「悬赏令接取 [1~3]」接取对应悬赏令'
     })
 
   // ===== 刷新 =====

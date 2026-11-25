@@ -251,7 +251,7 @@ export function registerBaseCommands(ctx: Context, config: Config) {
     })
 
   // ---------- 查看战斗详情 ----------
-  ctx.command('查看战斗详情', '查看最近 120 秒内的战斗记录（按每 10 回合分段发送）').alias('战斗详情')
+  ctx.command('查看战斗详情', '查看最近 120 秒内的战斗记录，按每 10 回合分段发送').alias('战斗详情')
     .action(async ({ session }) => {
       const p = await requirePlayer(ctx, session)
       const rec = getBattleRecord(p.uid)
@@ -260,7 +260,7 @@ export function registerBaseCommands(ctx: Context, config: Config) {
     })
 
   // ---------- 改名 ----------
-  ctx.command('修改道号 <name:string>', '修改道号（道号不可含空格，消耗 50000 × 境界ID 灵石）')
+  ctx.command('修改道号 <name:string>', '修改道号，道号不可含空格，消耗 50000 × 境界ID 灵石')
     .action(async ({ session }, name) => {
       if (!name) return '请输入新的道号'
       if (Buffer.byteLength(name, 'utf-8') > 30) return '道号过长（最多 30 字节）'
@@ -280,7 +280,7 @@ export function registerBaseCommands(ctx: Context, config: Config) {
     })
 
   // ---------- 排行榜 ----------
-  ctx.command('修仙排行榜 [type:string]', '查看排行榜（境界 / 灵石 / 战力）')
+  ctx.command('修仙排行榜 [type:string]', '查看排行榜，可选境界 / 灵石 / 战力')
     .action(async (_, type = '境界') => {
       const limit = 10
       if (type === '灵石') {
