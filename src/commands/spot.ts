@@ -10,6 +10,9 @@ import {
   formatCompact,
   getAffectedRows,
   parseAmount,
+  getSpotQiBonus,
+  getSpotQiMaxLevel,
+  qiPct,
 } from '../utils'
 
 const PLOT_COST = (idx: number) => 1_000_000 * Math.pow(2, idx - 2)
@@ -52,11 +55,11 @@ export function registerSpotCommands(ctx: Context) {
       const p = await requirePlayer(ctx, session)
       if (!p.blessedSpotFlag) return '尚未开辟洞府'
       const buff = await getOrCreateBuff(ctx, p.uid)
-      if (buff.blessedSpot >= 5) return '灵气已达 5 级'
+      if (buff.blessedSpot >= getSpotQiMaxLevel()) return `灵气已达 ${getSpotQiMaxLevel()} 级`
       const cost = SPOT_LEVEL_COST(buff.blessedSpot + 1)
       if (!(await costStone(ctx, p.uid, cost))) return `需 ${formatCompact(cost)} 灵石`
       await ctx.database.set(TABLE.buff, { uid: p.uid }, { blessedSpot: buff.blessedSpot + 1 })
-      return `🏞️ 灵气升级至 ${buff.blessedSpot + 1} 级（闭关修为 +${(buff.blessedSpot + 1) * 5}%，灵田产量 +${(buff.blessedSpot + 1) * 50}%）`
+      return `🏞️ 灵气升级至 ${buff.blessedSpot + 1} 级（闭关修为 +${qiPct(getSpotQiBonus(buff.blessedSpot + 1).cultivate)}%，灵田产量 +${qiPct(getSpotQiBonus(buff.blessedSpot + 1).yield)}%）`
     })
 
   ctx.command('开垦灵田', '扩建灵田').alias('洞府开垦')
@@ -186,7 +189,7 @@ export function registerSpotCommands(ctx: Context) {
 
         const buff = await getOrCreateBuff(ctx, p.uid)
         // 每级增加 50%（0.5倍）产量
-        const bonus = 1 + buff.blessedSpot * 0.5
+        const bonus = 1 + getSpotQiBonus(buff.blessedSpot).yield
         let total = 0
         for (const m of mature) {
           // 先计算总量，最后四舍五入
@@ -225,11 +228,12 @@ export function registerSpotCommands(ctx: Context) {
       const plots = await ctx.database.get(TABLE.plot, { uid: p.uid })
       const qiBonus = await getQiFlagBonus(ctx, p.uid)
       const flagLine = qiBonus.name
-        ? `聚灵旗：${qiBonus.name}（修为 ×${qiBonus.cultivateMul.toFixed(2)} / 灵田 ×${qiBonus.herbTimeMul.toFixed(2)}）`
+        ? `聚灵旗：${qiBonus.name}（修为获取 +${Math.round((qiBonus.cultivateMul - 1) * 100)}%，灵田增速 +${Math.round((1 / qiBonus.herbTimeMul - 1) * 100)}%，生长耗时 ×${qiBonus.herbTimeMul.toFixed(2)}）`
         : '聚灵旗：无'
+      const lv = buff.blessedSpot
       return [
         `🏞️ ${p.blessedSpotName}`,
-        `灵气等级：${buff.blessedSpot}`,
+        `灵气等级：${lv}（闭关修为 +${qiPct(getSpotQiBonus(lv).cultivate)}%，灵田产量 +${qiPct(getSpotQiBonus(lv).yield)}%）`,
         flagLine,
         `灵田：${plots.length} 块（其中空闲 ${plots.filter(r => !r.plantId).length} 块）`,
       ].join('\n')

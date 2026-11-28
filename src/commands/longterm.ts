@@ -6,7 +6,7 @@ import { data } from '../data'
 import {
   requirePlayer, costStone, recomputeAndSaveStats,
   getPlayer, getStone,
-  addPlayerExp,
+  addPlayerExp, applyQiExp, qiExpNote, rollRatioExp,
   isSameDay,
   formatRemainTime,
   getAffectedRows,
@@ -156,9 +156,9 @@ export function registerLongtermCommands(ctx: Context, config: Config) {
         return '🌫️ 参悟天机，却未能有所收获……'
       }
 
-      const needExp = getLevel(p.level)?.expToNext ?? 1000
-      const rate = 0.001 + Math.random() * 0.009
-      const gainExp = Math.max(1, Math.floor(needExp * rate))
+      const baseGain = rollRatioExp(p.level, 0.001, 0.01)
+      const qi = await applyQiExp(ctx, p.uid, baseGain)
+      const gainExp = Math.max(1, qi.gain)
 
       const gainRate = Math.random() < 0.3 ? 1 + Math.floor(Math.random() * 5) : 0
 
@@ -168,7 +168,7 @@ export function registerLongtermCommands(ctx: Context, config: Config) {
         levelUpRate: p.levelUpRate,
       })
 
-      return `✨ 顿悟！修为 +${formatCompact(gainExp)}${gainRate ? `，突破率 +${gainRate}%` : ''}`
+      return `✨ 顿悟！修为 +${formatCompact(gainExp)}${qiExpNote(qi.mul)}${gainRate ? `，突破率 +${gainRate}%` : ''}`
     })
 
   // 飞升转世
@@ -236,8 +236,11 @@ export function registerLongtermCommands(ctx: Context, config: Config) {
         target.levelUpRate = (target.levelUpRate || 0) + 2
         rateMsg = '，双方突破率 +2%'
       }
-      await addPlayerExp(ctx, p.uid, gain)
-      await addPlayerExp(ctx, target.uid, gain)
+      // 基础修为算完后，双方各自按自己的聚灵旗倍率套用
+      const mine = await applyQiExp(ctx, p.uid, gain)
+      const theirs = await applyQiExp(ctx, target.uid, gain)
+      await addPlayerExp(ctx, p.uid, mine.gain)
+      await addPlayerExp(ctx, target.uid, theirs.gain)
       await ctx.database.set(TABLE.player, { uid: p.uid }, {
         dualCultivation: cnt + 1, dualCultivationTime: new Date(),
         levelUpRate: p.levelUpRate,
@@ -245,7 +248,10 @@ export function registerLongtermCommands(ctx: Context, config: Config) {
       await ctx.database.set(TABLE.player, { uid: target.uid }, {
         levelUpRate: target.levelUpRate,
       })
-      return `与 ${target.userName} 双修，双方修为 +${formatCompact(gain)}${rateMsg}`
+      const expMsg = mine.gain === theirs.gain && mine.mul === theirs.mul
+        ? `双方修为 +${formatCompact(mine.gain)}${qiExpNote(mine.mul)}`
+        : `你修为 +${formatCompact(mine.gain)}${qiExpNote(mine.mul)}，对方修为 +${formatCompact(theirs.gain)}${qiExpNote(theirs.mul)}`
+      return `与 ${target.userName} 双修，${expMsg}${rateMsg}`
     })
 }
 

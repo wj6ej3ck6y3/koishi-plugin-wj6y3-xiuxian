@@ -6,6 +6,11 @@ export const DEFAULT_DROP_WEIGHTS: Record<string, number> = {
   gongfa: 10, shentong: 10, fuxiu: 3, qiFlag: 2, furnace: 2,
 }
 
+/** 秘境事件默认权重：灵石 / 修为 / 物品 / 受伤 */
+export const DEFAULT_RIFT_WEIGHTS: Record<string, number> = {
+  stone: 30, exp: 30, drop: 30, hurt: 10,
+}
+
 export interface Config {
   currency: string
   signMin: number
@@ -18,13 +23,14 @@ export interface Config {
   // 坊市
   shopAutoListing: boolean
   shopMinItems: number
-  shopAutoPool: number[]
   shopExpireHours: number
   // ✅ 悬赏令掉落
   bountyDropChance: number
   bountyDropCount: number
   bountyDropCategoryWeights: Record<string, number>
   riftDropChance: number
+  riftDailyLimit: number
+  riftOutcomeWeights: Record<string, number>
 }
 
 export const Config: Schema<Config> = Schema.intersect([
@@ -55,6 +61,10 @@ export const Config: Schema<Config> = Schema.intersect([
     // ---- 秘境 ----
     riftDropChance: Schema.number().default(40).max(100)
       .description('秘境探索获取灵石/修为时的额外物品掉落概率（%）'),
+    riftDailyLimit: Schema.number().default(3).min(0).step(1)
+      .description('秘境每日探索次数上限（最小为 0，0 表示每日不可探索）'),
+    riftOutcomeWeights: Schema.dict(Schema.number()).default({ ...DEFAULT_RIFT_WEIGHTS })
+      .description('秘境事件权重：stone 灵石 / exp 修为 / drop 物品 / hurt 受伤'),
 
     // ---- 坊市----
     shopAutoListing: Schema.boolean().default(true)
@@ -66,25 +76,13 @@ export const Config: Schema<Config> = Schema.intersect([
 
   // ===== 条件部分：仅 shopAutoListing 启用时显示 =====
   Schema.union([
-    // 启用：显示 shopMinItems / shopAutoPool
+    // 启用：显示 shopMinItems（自动上架物品列表在 data/坊市自動上架.json）
     Schema.object({
       shopAutoListing: Schema.const(true),
       shopMinItems: Schema.number().default(10).min(0)
         .description('坊市商品少于该值时自动上架'),
-      shopAutoPool: Schema.array(Schema.number()).default([
-        1101, 1102, 1103, 1104, 1105,
-        1500,
-        3001, 3002, 3005, 3006,
-        7001, 7011, 6001, 6011,
-        5000, 5001,
-        4003,
-        9001, 9002, 9003, 9004, 9005,
-        9011, 9012, 9013, 9014, 9099, 9100,
-        8001, 8002, 8003, 8004, 8005,
-        8101, 8102, 8103, 8104, 8105,
-      ]).description('自动上架白名单物品 ID'),
     }),
-    // 关闭：不显示 shopMinItems / shopAutoPool
+    // 关闭：不显示 shopMinItems
     Schema.object({}),
   ]),
 ]) as unknown as Schema<Config>

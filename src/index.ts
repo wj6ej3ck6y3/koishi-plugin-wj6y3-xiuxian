@@ -240,7 +240,7 @@ async function runHourlyShopJob(ctx: Context, config: Config) {
   const remain = await ctx.database.get(TABLE.shop, {})
   if (remain.length >= config.shopMinItems) return
 
-  const pool = config.shopAutoPool ?? []
+  const pool: number[] = Array.isArray(data.shopAutoPool?.pool) ? data.shopAutoPool.pool : []
   if (pool.length === 0) return
   const goodsId = pool[Math.floor(Math.random() * pool.length)]
   const price = Math.max(1, Math.floor(estimatePrice(goodsId)))

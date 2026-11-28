@@ -4,7 +4,7 @@ import { data, weightedPick } from '../data'
 import { TABLE } from '../models'
 import {
   requirePlayer, addStone, costStone, addItem,
-  addPlayerExp,
+  addPlayerExp, applyQiExp, qiExpNote,
   getBusyKind,
   getDropCategoryWeights, rollDrops, mergeDrops, formatDropList,
   isSameDay,
@@ -201,17 +201,18 @@ async function trySettleBounty(
       await addStone(ctx, p.uid, stoneReward)
       msg = `✅ 「${name}」成功！\n💎 获得灵石 +${formatCompact(stoneReward)}`
     } else {
-      await addPlayerExp(ctx, p.uid, expReward)
-      msg = `✅ 「${name}」成功！\n🌱 获得修为 +${formatCompact(expReward)}`
+      const qi = await applyQiExp(ctx, p.uid, expReward)
+      await addPlayerExp(ctx, p.uid, qi.gain)
+      msg = `✅ 「${name}」成功！\n🌱 获得修为 +${formatCompact(qi.gain)}${qiExpNote(qi.mul)}`
     }
     if (drops.length > 0) {
       for (const d of drops) await addItem(ctx, p.uid, d.id, d.num)
       msg += `\n🎁 额外掉落：${formatDropList(drops)}`
     }
   } else {
-    const expGain = Math.floor(calcExpReward(baseExp, level, successRate) * 0.3)
-    await addPlayerExp(ctx, p.uid, expGain)
-    msg = `❌ 「${name}」失败，仍获得修为 +${formatCompact(expGain)}`
+    const qi = await applyQiExp(ctx, p.uid, Math.floor(calcExpReward(baseExp, level, successRate) * 0.3))
+    await addPlayerExp(ctx, p.uid, qi.gain)
+    msg = `❌ 「${name}」失败，仍获得修为 +${formatCompact(qi.gain)}${qiExpNote(qi.mul)}`
   }
 
   await cleanQuestAndWork()

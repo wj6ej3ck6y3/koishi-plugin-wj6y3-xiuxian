@@ -3,23 +3,18 @@ import { Config } from '../config'
 import { weightedPick } from '../data'
 import { TABLE } from '../models'
 import {
-  requirePlayer, addStone, addItem, addPlayerExp, floorRow,
+  requirePlayer, addStone, addItem, addPlayerExp, applyQiExp, qiExpNote, rollRatioExp, getRiftOutcomeWeights, floorRow,
   getBusyKind, getDropCategoryWeights, rollDrops, mergeDrops, formatDropList,
   isSameDay, formatRemainTime,
   formatCompact,
 } from '../utils'
 
-// 秘境结果四档（掉落档不再是固定生骨丹）
-const OUTCOMES = [
-  { w: 40, kind: 'stone' as const },
-  { w: 35, kind: 'exp' as const },
-  { w: 15, kind: 'drop' as const },
-  { w: 10, kind: 'hurt' as const },
-]
+// 秘境结果四档（权重由配置项 riftOutcomeWeights 决定）
+const OUTCOME_KINDS = ['stone', 'exp', 'drop', 'hurt'] as const
 
 export function registerRiftCommands(ctx: Context, config: Config) {
   ctx.command('秘境帮助', '说明').action(() => [
-    '🌀 探索秘境：每日 3 次；同一天内两次探索需间隔 1 小时（跨日重置），随机获得灵石 / 修为 / 物品，或受伤。',
+    `🌀 探索秘境：每日 ${config.riftDailyLimit} 次；同一天内两次探索需间隔 1 小时（跨日重置），随机获得灵石 / 修为 / 物品，或受伤。`,
   ].join('\n'))
 
   ctx.command('探索秘境', '秘境探索')
@@ -38,7 +33,7 @@ export function registerRiftCommands(ctx: Context, config: Config) {
       if (!sameDay) {
         p.riftDailyCount = 0
       }
-      if (p.riftDailyCount >= 3) return '今日探索次数已用尽'
+      if (p.riftDailyCount >= config.riftDailyLimit) return '今日探索次数已用尽'
       if (sameDay && Date.now() - +last < 3600 * 1000) {
         const remainMs = 3600 * 1000 - (Date.now() - +last)
         return `冷却中，还需 ${formatRemainTime(remainMs)}`
@@ -50,7 +45,9 @@ export function registerRiftCommands(ctx: Context, config: Config) {
       })
 
       // 抽取结果
-      const chosen = weightedPick(OUTCOMES, o => o.w) ?? OUTCOMES[0]
+      const outcomeW = getRiftOutcomeWeights(config)
+      const outcomes = OUTCOME_KINDS.map(kind => ({ kind, w: Number(outcomeW[kind]) || 0 }))
+      const chosen = weightedPick(outcomes, o => o.w) ?? outcomes[0]
 
       const weights = getDropCategoryWeights(config)
       const dropChance = config.riftDropChance
@@ -71,9 +68,10 @@ export function registerRiftCommands(ctx: Context, config: Config) {
       }
 
       if (chosen.kind === 'exp') {
-        const a = 100 + Math.floor(Math.random() * 500)
-        await addPlayerExp(ctx, p.uid, a)
-        msg.push(`🌀 偶遇灵气漩涡，修为 +${formatCompact(a)}`)
+        const a = rollRatioExp(p.level, 0.005, 0.01)
+        const qi = await applyQiExp(ctx, p.uid, a)
+        await addPlayerExp(ctx, p.uid, qi.gain)
+        msg.push(`🌀 偶遇灵气漩涡，修为 +${formatCompact(qi.gain)}${qiExpNote(qi.mul)}`)
         if (Math.random() * 100 < dropChance) {
           const drops = rollDrops(weights, 1)
           if (drops.length > 0) {

@@ -8,7 +8,7 @@ import {
   isOneShotBreakthroughPill, isOneShotPillUsed,
   getOneShotBreakthroughValue,
   getPillUseLimit, getPillUsedCount, addPillUsedCount,
-  addPlayerExp,
+  addPlayerExp, applyQiExp, qiExpNote, qiPct,
   setEquipSlot, getEquippedIds, EquipSlot,
   getFuxiuBonus,
   floorRow,
@@ -405,9 +405,12 @@ export function registerBackpackCommands(ctx: Context) {
         await ctx.database.set(TABLE.player, { uid: p.uid }, floorRow(TABLE.player, {
           hp: p.hp, mp: p.mp, levelUpRate: p.levelUpRate,
         }))
+        let expNote = ''
         if (expGain) {
-          await addPlayerExp(ctx, p.uid, expGain)
-          p.exp += Math.floor(expGain)
+          const qi = await applyQiExp(ctx, p.uid, expGain)
+          await addPlayerExp(ctx, p.uid, qi.gain)
+          p.exp += qi.gain
+          expNote = `\n🌱 修为 +${formatCompact(qi.gain)}${qiExpNote(qi.mul)}`
         }
         await recomputeAndSaveStats(ctx, p)
 
@@ -419,6 +422,7 @@ export function registerBackpackCommands(ctx: Context) {
         if (limit !== undefined) {
           msg += `（整局已服 ${await getPillUsedCount(ctx, p.uid, goodsId)}/${limit} 次）`
         }
+        msg += expNote
         if (hasHpRecovery || hasMpRecovery) {
           msg += `\n🩸 当前气血：${formatCompact(p.hp)}/${formatCompact(p.maxhp)}（${formatPct(p.hp, p.maxhp)}%）` +
             `\n💧 当前真元：${formatCompact(p.mp)}/${formatCompact(p.maxmp)}（${formatPct(p.mp, p.maxmp)}%）`
@@ -437,9 +441,9 @@ export function registerBackpackCommands(ctx: Context) {
       // ===== 聚灵旗 =====
       if (meta._type === 'qiflag') {
         await setEquipSlot(ctx, p.uid, 'qiFlagBuff', goodsId)
-        const cultPct = ((meta.cultivateSpeed ?? 0) * 10).toFixed(0)
-        const herbPct = ((meta.herbSpeed ?? 0) * 20).toFixed(0)
-        return `🚩 已装备聚灵旗「${meta.name}」（闭关修为 +${cultPct}% / 灵田增速 +${herbPct}%）`
+        const cultPct = qiPct(meta.cultivateBonus)
+        const herbPct = qiPct(meta.herbSpeedBonus)
+        return `🚩 已装备聚灵旗「${meta.name}」（修为获取 +${cultPct}% / 灵田增速 +${herbPct}%）`
       }
 
       // ===== 炼丹炉 =====
@@ -564,9 +568,9 @@ export function registerBackpackCommands(ctx: Context) {
 
       // ===== 聚灵旗 =====
       if (found._type === 'qiflag') {
-        lines.push('类型：聚灵旗（装备后提升闭关修为速度与灵田生长速度）')
-        if (found.cultivateSpeed !== undefined) lines.push(`闭关修为 +${(found.cultivateSpeed * 10).toFixed(0)}%`)
-        if (found.herbSpeed !== undefined) lines.push(`灵田增速 +${(found.herbSpeed * 20).toFixed(0)}%`)
+        lines.push('类型：聚灵旗（装备后提升各类修为获取与灵田生长速度，战斗奖励与兑换奖励除外）')
+        if (found.cultivateBonus !== undefined) lines.push(`修为获取 +${qiPct(found.cultivateBonus)}%`)
+        if (found.herbSpeedBonus !== undefined) lines.push(`灵田增速 +${qiPct(found.herbSpeedBonus)}%`)
       }
 
       // ===== 炼丹炉 =====

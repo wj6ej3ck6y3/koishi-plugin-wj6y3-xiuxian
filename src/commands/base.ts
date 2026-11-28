@@ -14,7 +14,7 @@ import {
   getBattleRecord,
   truncateDecimal,
   formatPct,
-  formatCompact,
+  formatCompact, qiPct,
   sendSegments,
   segmentBattleLog,
   getAffectedRows,
@@ -161,7 +161,7 @@ export function registerBaseCommands(ctx: Context, config: Config) {
           },
           {
             icon: '🚩', label: '聚灵旗', id: buff.qiFlagBuff, table: data.qiFlags,
-            desc: (m) => `（修为 +${((m.cultivateSpeed ?? 0) * 10).toFixed(0)}% / 灵田 +${((m.herbSpeed ?? 0) * 20).toFixed(0)}%）`,
+            desc: (m) => `（修为获取 +${qiPct(m.cultivateBonus)}% / 灵田增速 +${qiPct(m.herbSpeedBonus)}%）`,
           },
         ]
 

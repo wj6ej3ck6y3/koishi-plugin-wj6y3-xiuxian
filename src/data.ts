@@ -32,6 +32,8 @@ export const data = {
   furnaces:     load<any>('煉丹爐.json'),
   herbs:        load<any>('煉丹藥材.json'),
   qiFlags:      load<any>('聚靈旗.json'),
+  spotQi:       load<any>('洞府靈氣.json'),
+  shopAutoPool: load<any>('坊市自動上架.json'),
   weapons:      load<WeaponOrArmorEntry>('武器屬性.json'),
   armors:       load<WeaponOrArmorEntry>('防具屬性.json'),
   roots:        load<RootData>('靈根屬性.json'),

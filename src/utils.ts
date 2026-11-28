@@ -7,7 +7,7 @@ import {
 } from './data'
 import { TABLE, Player, BuffRow, FLOORED_FIELDS } from './models'
 import type { ComputedStats, Modifier, FuXiuEntry } from './types'
-import { Config, getPluginConfig, DEFAULT_DROP_WEIGHTS } from './config'
+import { Config, getPluginConfig, DEFAULT_DROP_WEIGHTS, DEFAULT_RIFT_WEIGHTS } from './config'
 
 export { getShenTong, weightedPick }
 
@@ -987,9 +987,6 @@ export async function computeOneShotBreakthroughBonus(
 
 // ======================= 聚灵旗 =======================
 
-export const QI_CULTIVATE_PER_LEVEL = 0.1
-export const QI_HERB_PER_LEVEL = 0.2
-
 export interface QiFlagBonus {
   cultivateMul: number
   herbTimeMul: number
@@ -1001,9 +998,38 @@ export async function getQiFlagBonus(ctx: Context, uid: number): Promise<QiFlagB
   if (!buff.qiFlagBuff) return { cultivateMul: 1, herbTimeMul: 1, name: '' }
   const flag = data.qiFlags[String(buff.qiFlagBuff)]
   if (!flag) return { cultivateMul: 1, herbTimeMul: 1, name: '' }
-  const cultivateMul = 1 + (flag.cultivateSpeed ?? 0) * QI_CULTIVATE_PER_LEVEL
-  const herbTimeMul = 1 / (1 + (flag.herbSpeed ?? 0) * QI_HERB_PER_LEVEL)
+  const cultivateMul = 1 + (Number(flag.cultivateBonus) || 0)
+  const herbTimeMul = 1 / (1 + (Number(flag.herbSpeedBonus) || 0))
   return { cultivateMul, herbTimeMul, name: flag.name ?? '' }
+}
+
+/**
+ * 对「修为获取」套用聚灵旗倍率（向下取整）。
+ * 适用：闭关 / 悬赏令 / 参悟天机 / 探索秘境 / 双修 / 使用丹药；
+ * 战斗奖励（世界BOSS、打劫）与兑换奖励（宗门贡献兑换、灵石修炼）不适用。
+ */
+export async function applyQiExp(ctx: Context, uid: number, base: number): Promise<{ gain: number; mul: number }> {
+  const { cultivateMul } = await getQiFlagBonus(ctx, uid)
+  return { gain: Math.floor(base * cultivateMul), mul: cultivateMul }
+}
+
+/** 聚灵旗修为加成提示，如「（聚灵旗 +10%）」；无加成返回空串 */
+export function qiExpNote(mul: number): string {
+  return mul > 1 ? `（聚灵旗 +${Math.round((mul - 1) * 100)}%）` : ''
+}
+
+/** 聚灵旗加成数值（如 0.1）→ 显示用百分比（10） */
+export const qiPct = (bonus: number | undefined) => Math.round((Number(bonus) || 0) * 100)
+
+/** 洞府灵气（data/洞府靈氣.json）：指定等级的闭关修为 / 灵田产量加成，等级 0 或缺失为 0 */
+export function getSpotQiBonus(level: number): { cultivate: number; yield: number } {
+  const row = data.spotQi[String(level)]
+  return { cultivate: Number(row?.cultivateBonus) || 0, yield: Number(row?.yieldBonus) || 0 }
+}
+
+/** 洞府灵气最高等级 = 设定档中最大的等级键 */
+export function getSpotQiMaxLevel(): number {
+  return Math.max(0, ...Object.keys(data.spotQi).map(Number).filter(Number.isFinite))
 }
 
 // ======================= 悬赏令 / 秘境掉落池 =======================
@@ -1062,6 +1088,23 @@ export function getDropCategoryWeights(config: Config): Record<string, number> {
   const w = config.bountyDropCategoryWeights
   if (w && typeof w === 'object' && Object.keys(w).length > 0) return w
   return DEFAULT_DROP_WEIGHTS
+}
+
+/** 秘境事件权重（stone / exp / drop / hurt）：未配置或全为 0 时使用默认权重 */
+export function getRiftOutcomeWeights(config: Config): Record<string, number> {
+  const w = config.riftOutcomeWeights
+  if (w && typeof w === 'object' && Object.values(w).some(v => Number(v) > 0)) return w
+  return DEFAULT_RIFT_WEIGHTS
+}
+
+/**
+ * 按「当前境界突破所需修为 × 随机比例」计算修为（至少 1）。
+ * 比例在 [minRatio, maxRatio] 内随机，系数写死在调用处，不对用户开放。
+ */
+export function rollRatioExp(levelId: string, minRatio: number, maxRatio: number): number {
+  const needExp = getLevel(levelId)?.expToNext ?? 1000
+  const rate = minRatio + Math.random() * (maxRatio - minRatio)
+  return Math.max(1, Math.floor(needExp * rate))
 }
 
 /** 按类别权重从全局掉落池抽 count 件 */

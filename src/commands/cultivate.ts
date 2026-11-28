@@ -10,6 +10,7 @@ import {
   computeOneShotBreakthroughBonus,
   getOneShotBreakthroughValue,
   getQiFlagBonus,
+  getSpotQiBonus,
   getBusyKind,
   claimByRemove,
   addPlayerExp,
@@ -46,7 +47,7 @@ export function registerCultivateCommands(ctx: Context, config: Config) {
       const minutes = Math.floor((Date.now() - +new Date(rows[0].createTime)) / 60000)
 
       const buff = await getOrCreateBuff(ctx, p.uid)
-      const spotBonus = 1 + (buff.blessedSpot || 0) * 0.05
+      const spotBonus = 1 + getSpotQiBonus(buff.blessedSpot || 0).cultivate
       const cultSpeed = await computeCultivateSpeed(ctx, p.uid)
       const base = config.closeExpPerMinute
       const lv = getLevel(p.level)!

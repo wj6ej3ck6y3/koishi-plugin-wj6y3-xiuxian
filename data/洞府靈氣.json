@@ -1,0 +1,22 @@
+{
+  "1": {
+    "cultivateBonus": 0.25,
+    "yieldBonus": 0.5
+  },
+  "2": {
+    "cultivateBonus": 0.5,
+    "yieldBonus": 1
+  },
+  "3": {
+    "cultivateBonus": 0.75,
+    "yieldBonus": 1.5
+  },
+  "4": {
+    "cultivateBonus": 1,
+    "yieldBonus": 2
+  },
+  "5": {
+    "cultivateBonus": 1.25,
+    "yieldBonus": 2.5
+  }
+}
